@@ -43,19 +43,15 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
     if (nrow(r)) r else NULL
   })
 
-  # Everything the student's screen depends on — and nothing else. Other students
-  # submitting must NOT invalidate this (it would wipe an in-progress price entry).
-  student_key <- shiny::reactive({
-    st <- state()
-    if (is.null(st)) return("none")
-    p <- me()
-    if (is.null(p)) return(paste0("join|", st$session$phase))
-    sub <- my_submission(); res <- my_result()
-    paste(st$session$phase, st$session$current_round,
-          p$market_id %||% "NA", p$firm_label %||% "NA",
-          if (is.null(sub)) "-" else paste(sub$price[1], sub$rationale[1], sub$submitted_at[1]),
-          if (is.null(res)) "-" else res$computed_at[1],
-          sep = "|")
+  # A coarse key for the student's screen, held in a reactiveVal so the screen
+  # re-renders ONLY when this value truly changes. A plain reactive() would still
+  # invalidate the renderUI on every poll tick (Shiny doesn't value-diff those),
+  # rebuilding the price input and wiping whatever the student had typed when
+  # *another* student submitted. It depends on this student's own state only.
+  screen_key <- shiny::reactiveVal("init")
+  shiny::observe({
+    k <- pl_screen_key(state(), me(), my_submission(), my_result())
+    if (!identical(k, shiny::isolate(screen_key()))) screen_key(k)
   })
 
   shiny::observeEvent(input$join, {
@@ -79,7 +75,7 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
   })
 
   output$screen <- shiny::renderUI({
-    student_key()                     # the only reactive dependency (see above)
+    screen_key()                      # the only reactive dependency (see above)
     shiny::isolate(pl_screen(ns, state(), me(), my_submission(), my_result()))
   })
 })
@@ -102,6 +98,19 @@ pl_screen <- function(ns, st, p, sub, res) {
       scored   = pl_result(p, st, res),
       finished = pl_finished(p, st),
       pl_card("Standby", "…"))
+}
+
+# A coarse identity for the student's screen. Must change when THIS student's own
+# view changes (phase, round, pairing, their own submission/result) and NOT when
+# another student acts — otherwise re-rendering wipes an in-progress price entry.
+pl_screen_key <- function(st, p, sub, res) {
+  if (is.null(st)) return("no-game")
+  if (is.null(p))  return(paste0("join|", st$session$phase))
+  paste(st$session$phase, st$session$current_round,
+        p$market_id %||% "NA", p$firm_label %||% "NA",
+        if (is.null(sub)) "-" else paste(sub$price[1], sub$rationale[1], sub$submitted_at[1]),
+        if (is.null(res)) "-" else res$computed_at[1],
+        sep = "|")
 }
 
 # --- screens ---------------------------------------------------------------

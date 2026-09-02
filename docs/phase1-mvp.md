@@ -53,8 +53,12 @@ to instead reuse that player's previous-round price; re-score anytime.
 lists them all — Open (make active again), export CSV, Rename, or Delete a false
 start. Deleting is the only thing that removes data.
 
-*Reset to lobby* replays the same roster (clears that session's results);
-*New session* leaves the old one in History and starts fresh.
+**Reset for a do-over** is only on the *mid-game* screen (not after a game
+finishes), and asks for confirmation before it deletes the session's prices and
+results — the roster is kept so you can replay from round 1. To keep a finished
+game's data, just start a *New session*; the old one stays in History.
+
+Round counts are per game in `config/games.yaml` (`rounds:`), not hard-coded.
 
 ## Persistence
 

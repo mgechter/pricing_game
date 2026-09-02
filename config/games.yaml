@@ -27,7 +27,7 @@
 games:
   - id: bertrand
     label: "Bertrand (homogeneous good)"
-    rounds: 10
+    rounds: 4
     pairing: fixed
     horizon: known
     reveal: per_round

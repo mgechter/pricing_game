@@ -37,17 +37,19 @@ test_that("a full 4-player Bertrand game runs lobby -> finished", {
   expect_equal(sort(res1$profit[res1$market_id == 2]), c(30 * 35, 30 * 35))
 
   expect_equal(sl_session(con, sid)$phase, "scored")
-  sl_advance_round(con, sid)
-  expect_equal(sl_session(con, sid)$current_round, 2)
+  nr <- sl_session(con, sid)$n_rounds
+  out <- sl_advance_round(con, sid)
 
-  # play rounds 2..10 quickly
-  for (r in 2:10) {
+  # play the remaining rounds quickly (round count comes from games.yaml)
+  while (identical(out, "open")) {
+    r <- sl_session(con, sid)$current_round
     for (pid in ids) sl_submit(con, sid, pid, r, 20)
     sl_score_round(con, sid)
     out <- sl_advance_round(con, sid)
   }
   expect_equal(out, "finished")
   expect_equal(sl_session(con, sid)$phase, "finished")
+  expect_equal(max(sl_load_state(con, sid)$results$round), nr)
 
   fin <- sl_load_state(con, sid)$results
   # cumulative profit is monotone per player and equals the running sum

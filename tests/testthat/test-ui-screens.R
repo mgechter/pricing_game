@@ -49,16 +49,21 @@ test_that("every admin and player screen renders across the game lifecycle", {
   renders(ad_round(ns, st, "scored"))
   renders(pl_result(st$players[1, ], st, r1))
 
-  for (r in 1:10) {
-    if (r > 1) for (pid in paired) sl_submit(con, sid, pid, r, 12)
-    if (sl_session(con, sid)$phase == "open") sl_score_round(con, sid)
+  nr <- sl_session(con, sid)$n_rounds
+  repeat {
+    s <- sl_session(con, sid)
+    if (s$phase == "finished") break
+    if (s$phase == "open") {
+      for (pid in paired) sl_submit(con, sid, pid, s$current_round, 12)
+      sl_score_round(con, sid)
+    }
     sl_advance_round(con, sid)
   }
   st <- sl_load_state(con, sid)
   expect_equal(st$session$phase, "finished")
   renders(ad_finished(ns, st))
   renders(pl_finished(st$players[st$players$player_id == paired[1], ], st))
-  expect_equal(nrow(sl_export_frame(con, sid)), 40)   # 4 players x 10 rounds
+  expect_equal(nrow(sl_export_frame(con, sid)), 4 * nr)   # 4 players x nr rounds
 })
 
 test_that("player bench screen renders for a sitting-out player", {

@@ -60,7 +60,21 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
 
   shiny::observeEvent(input$reset, {
     st <- state(); shiny::req(st)
-    guard({ sl_reset_to_lobby(con, sid()); shiny::showNotification("Reset to lobby.", type = "message") })
+    shiny::showModal(shiny::modalDialog(
+      title = "Reset this game to the lobby?",
+      shiny::p("This permanently deletes every price and result recorded in this ",
+               "session. The player roster is kept, so you can replay from round 1. ",
+               "This cannot be undone."),
+      shiny::p(class = "pg-muted",
+               "To keep this session's data, use “New session” instead — it stays in History."),
+      footer = shiny::tagList(shiny::modalButton("Cancel"),
+        shiny::actionButton(ns("reset_ok"), "Reset — delete this session's data",
+                            class = "btn btn-danger"))))
+  })
+  shiny::observeEvent(input$reset_ok, {
+    st <- state(); shiny::req(st)
+    guard({ sl_reset_to_lobby(con, sid()); shiny::showNotification("Game reset to lobby.", type = "message") })
+    shiny::removeModal()
   })
 
   shiny::observeEvent(input$newsession, sl_clear_active(con))
@@ -286,7 +300,8 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
       controls,
       shiny::span(style = "margin-left:1rem;", shiny::downloadButton(ns("dl"), "Export CSV")),
       shiny::hr(),
-      shiny::actionButton(ns("reset"), "Reset to lobby", class = "btn btn-link text-danger")))
+      shiny::actionButton(ns("reset"), "Reset game for a do-over…",
+                          class = "btn btn-link text-danger")))
 }
 
 ad_finished <- function(ns, st) {
@@ -302,6 +317,7 @@ ad_finished <- function(ns, st) {
     shiny::div(class = "card-body",
       shiny::h5("Leaderboard"), html_table(lb),
       shiny::downloadButton(ns("dl"), "Export CSV"), " ",
-      shiny::actionButton(ns("newsession"), "New session", class = "btn btn-primary"), " ",
-      shiny::actionButton(ns("reset"), "Replay (reset to lobby)", class = "btn btn-link")))
+      shiny::actionButton(ns("newsession"), "New session", class = "btn btn-primary"),
+      shiny::p(class = "pg-muted", style = "margin-top:.75rem;",
+        "This session is saved in History. Start a fresh one with “New session”.")))
 }
