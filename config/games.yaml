@@ -1,0 +1,85 @@
+# Declarative game / treatment definitions.
+#
+# The engine (R/engine/), the debrief, and (later) the Shiny app all read from
+# here, so the live game, its benchmarks, and the slides cannot drift apart.
+#
+# Fields
+#   id         unique key (referenced by the app and the parity test)
+#   label      shown to players and admin
+#   rounds     number of rounds — a parameter, not hard-coded
+#   pairing    fixed | random_each_round | random_once
+#   horizon    known | hidden_end | random_continuation
+#   reveal     per_round | end_only
+#   decisions  decision inputs the player UI renders (v1: [price])
+#   demand.model   -> key in DEMAND_MODELS (resolve.R)
+#   demand.params  -> passed verbatim to the demand model
+#   benchmarks.ne / benchmarks.monopoly   a number, or "compute" (see equilibria.R)
+#
+# HOTELLING PARAMETER NOTE
+#   The share formula is  share_i = 0.5 + (p_j - p_i) / (2 * t * L),  with a
+#   residual branch  min(1, (V - p_i) / (t * L))  and full capture at gap
+#   `capture_gap`.  Here `t` is the spreadsheet's $O$3 cell and L its "/100".
+#   The 2026 sheet ran  t (O3) = 2  in BOTH differentiated games (so they were
+#   mechanically identical; NE = mc + t*L = $200).  The values below are the
+#   *intended* design — genuine high vs low differentiation.  The parity test
+#   (R/parity.R) overrides back to t = 2 to reproduce the 2026 numbers exactly.
+
+games:
+  - id: bertrand
+    label: "Bertrand (homogeneous good)"
+    rounds: 10
+    pairing: fixed
+    horizon: known
+    reveal: per_round
+    decisions: [price]
+    demand:
+      model: bertrand_homogeneous
+      params:
+        choke: 100        # market demand  D = choke - P
+        mc: 0
+        tie: split        # equal prices split the market 50/50
+    benchmarks:
+      ne: compute         # = mc            = 0
+      monopoly: compute   # = (choke+mc)/2  = 50
+
+  - id: hotelling_high
+    label: "Differentiated products — high differentiation (t = 1)"
+    rounds: 10
+    pairing: fixed
+    horizon: known
+    reveal: per_round
+    decisions: [price]
+    demand:
+      model: hotelling_linear
+      params:
+        V: 250              # reservation price ($O$2)
+        t: 1                # differentiation / transport parameter ($O$3); 2026 sheet used 2
+        L: 100              # street length
+        M: 100              # market size (consumers)
+        mc: 0
+        coverage_decay: true  # market empties from the middle when both prices are high
+    benchmarks:
+      ne: compute         # = mc + t*L    = 100
+      monopoly: compute   # = V - t*L/2   = 200
+      collusive: compute  # with coverage decay, also 200
+
+  - id: hotelling_low
+    label: "Differentiated products — low differentiation (t = 0.5)"
+    rounds: 10
+    pairing: fixed
+    horizon: known
+    reveal: per_round
+    decisions: [price]
+    demand:
+      model: hotelling_linear
+      params:
+        V: 250
+        t: 0.5
+        L: 100
+        M: 100
+        mc: 0
+        coverage_decay: true
+    benchmarks:
+      ne: compute         # = mc + t*L    = 50
+      monopoly: compute   # = V - t*L/2   = 225
+      collusive: compute  # with coverage decay, also 225

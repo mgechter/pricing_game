@@ -1,0 +1,25 @@
+Student 1,Student 2,Student 1 Total Profit,Student 2 Total Profit,Total Profit,Game
+Micah,Eric,"$32,925","$30,642","$63,567",Hoteling 1
+Mason,Stephen,"$67,893","$76,762","$144,656",Hoteling 1
+Stephen,Mason,"$76,762","$67,893","$144,656",Hoteling 1
+Eric,Micah,"$30,642","$32,925","$63,567",Hoteling 1
+Habibur,Wilson,"$57,749","$65,621","$123,370",Hoteling 1
+Bryan,Brianna,"$61,771","$63,846","$125,617",Hoteling 1
+Brianna,Bryan,"$63,846","$61,771","$125,617",Hoteling 1
+Wilson,Habibur,"$65,621","$57,749","$123,370",Hoteling 1
+Micah,Wilson,$223,$187,$409,Bertrand
+Mason,Brianna,$50,"$1,556","$1,606",Bertrand
+Stephen,Bryan,"$1,350","$3,726","$5,076",Bertrand
+Eric,Habibur,$426,$159,$585,Bertrand
+Habibur,Eric,$159,$426,$585,Bertrand
+Bryan,Stephen,"$3,726","$1,350","$5,076",Bertrand
+Brianna,Mason,"$1,556",$50,"$1,606",Bertrand
+Wilson,Micah,$187,$223,$409,Bertrand
+Micah,Bryan,"$55,888","$51,331","$107,219",Hoteling .5
+Mason,Brianna,"$47,613","$47,520","$95,133",Hoteling .6
+Stephen,Wilson,"$47,127","$56,701","$103,828",Hoteling .7
+Eric,Habibur,"$38,363","$45,863","$84,225",Hoteling .8
+Habibur,Eric,"$45,863","$38,363","$84,225",Hoteling .9
+Bryan,Micah,"$51,331","$55,888","$107,219",Hoteling .10
+Brianna,Mason,"$47,520","$47,613","$95,133",Hoteling .11
+Wilson,Stephen,"$56,701","$47,127","$103,828",Hoteling .12

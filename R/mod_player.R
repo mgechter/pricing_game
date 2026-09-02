@@ -1,0 +1,183 @@
+# Player-facing module: join, submit a price each round, see your result.
+
+player_ui <- function(id) {
+  ns <- shiny::NS(id)
+  shiny::div(class = "pg-narrow", shiny::uiOutput(ns("screen")))
+}
+
+player_server <- function(id, con) shiny::moduleServer(id, function(input, output, session) {
+  ns <- session$ns
+
+  token <- shiny::reactiveVal(
+    shiny::parseQueryString(shiny::isolate(session$clientData$url_search))$t
+  )
+
+  state <- shiny::reactivePoll(1000, session,
+    checkFunc = function() {
+      s <- sl_active_session(con)
+      if (is.null(s)) "none" else paste0(s$session_id, "@", sl_state_stamp(con, s$session_id))
+    },
+    valueFunc = function() {
+      s <- sl_active_session(con)
+      if (is.null(s)) NULL else sl_load_state(con, s$session_id)
+    })
+
+  me <- shiny::reactive({
+    st <- state(); tk <- token()
+    if (is.null(st) || is.null(tk) || !nzchar(tk)) return(NULL)
+    p <- sl_player_by_token(con, tk)
+    if (is.null(p) || p$session_id != st$session$session_id) return(NULL)
+    p
+  })
+
+  my_submission <- shiny::reactive({
+    st <- state(); p <- me(); if (is.null(st) || is.null(p)) return(NULL)
+    s <- st$submissions[st$submissions$player_id == p$player_id, , drop = FALSE]
+    if (nrow(s)) s else NULL
+  })
+
+  my_result <- shiny::reactive({
+    st <- state(); p <- me(); if (is.null(st) || is.null(p)) return(NULL)
+    r <- st$results[st$results$player_id == p$player_id &
+                    st$results$round == st$session$current_round, , drop = FALSE]
+    if (nrow(r)) r else NULL
+  })
+
+  # Everything the student's screen depends on — and nothing else. Other students
+  # submitting must NOT invalidate this (it would wipe an in-progress price entry).
+  student_key <- shiny::reactive({
+    st <- state()
+    if (is.null(st)) return("none")
+    p <- me()
+    if (is.null(p)) return(paste0("join|", st$session$phase))
+    sub <- my_submission(); res <- my_result()
+    paste(st$session$phase, st$session$current_round,
+          p$market_id %||% "NA", p$firm_label %||% "NA",
+          if (is.null(sub)) "-" else paste(sub$price[1], sub$rationale[1], sub$submitted_at[1]),
+          if (is.null(res)) "-" else res$computed_at[1],
+          sep = "|")
+  })
+
+  shiny::observeEvent(input$join, {
+    st <- state(); shiny::req(st)
+    r <- tryCatch(sl_add_player(con, st$session$session_id, input$name),
+                  error = function(e) e)
+    if (inherits(r, "error")) {
+      shiny::showNotification(conditionMessage(r), type = "error"); return()
+    }
+    token(r$token)
+    shiny::updateQueryString(paste0("?t=", r$token), mode = "replace")
+  })
+
+  shiny::observeEvent(input$submit, {
+    st <- state(); p <- me(); shiny::req(st, p)
+    r <- tryCatch(sl_submit(con, st$session$session_id, p$player_id,
+                            st$session$current_round, input$price, input$rationale),
+                  error = function(e) e)
+    if (inherits(r, "error")) shiny::showNotification(conditionMessage(r), type = "error")
+    else shiny::showNotification("Submitted ✓", type = "message", duration = 2)
+  })
+
+  output$screen <- shiny::renderUI({
+    student_key()                     # the only reactive dependency (see above)
+    shiny::isolate(pl_screen(ns, state(), me(), my_submission(), my_result()))
+  })
+})
+
+pl_screen <- function(ns, st, p, sub, res) {
+    if (is.null(st))
+      return(shiny::div(class = "card", shiny::div(class = "card-body",
+        "No game is running yet. Keep this page open — it updates itself.")))
+
+    if (is.null(p)) return(pl_join(ns, st))
+
+    ph <- st$session$phase
+    on_bench <- !is.null(p$market_id) && is.na(p$market_id) && ph != "lobby"
+    if (on_bench) return(pl_card("You're sitting this one out",
+      "There was an odd number of players, so you're on the bench for this game. Watch the projector — you're back next game."))
+
+    switch(ph,
+      lobby    = pl_lobby(p, st),
+      open     = pl_round(ns, p, st, sub),
+      scored   = pl_result(p, st, res),
+      finished = pl_finished(p, st),
+      pl_card("Standby", "…"))
+}
+
+# --- screens ---------------------------------------------------------------
+
+pl_card <- function(title, body) shiny::div(class = "card",
+  shiny::div(class = "card-header", title),
+  shiny::div(class = "card-body", shiny::p(body)))
+
+pl_join <- function(ns, st) shiny::div(class = "card",
+  shiny::div(class = "card-header", sprintf("Pricing game — %s", st$game$label)),
+  shiny::div(class = "card-body",
+    shiny::p(sprintf("%d player(s) in the lobby.", nrow(st$players))),
+    shiny::textInput(ns("name"), "Your name", placeholder = "e.g. Jordan"),
+    shiny::actionButton(ns("join"), "Join", class = "btn btn-primary")))
+
+pl_lobby <- function(p, st) shiny::div(class = "card",
+  shiny::div(class = "card-header", "You're in"),
+  shiny::div(class = "card-body",
+    shiny::div(class = "pg-big", p$display_name),
+    shiny::p(class = "pg-muted",
+      sprintf("Waiting for the instructor to start. %d player(s) joined.", nrow(st$players)))))
+
+pl_round <- function(ns, p, st, sub) {
+  submitted <- !is.null(sub)
+  last <- if (submitted) sub$price[1] else NA_real_
+  shiny::div(class = "card",
+    shiny::div(class = "card-header",
+      sprintf("Round %d of %d", st$session$current_round, st$session$n_rounds)),
+    shiny::div(class = "card-body",
+      shiny::p(shiny::strong(sprintf("You are %s.", p$firm_label)),
+               " Your rival is the other firm in your market."),
+      shiny::numericInput(ns("price"), "Your price ($)",
+        value = if (is.na(last)) NULL else last, min = 0, step = 1),
+      shiny::textAreaInput(ns("rationale"), "Why this price? (optional)",
+        value = if (submitted) sub$rationale[1] else "", rows = 2),
+      shiny::actionButton(ns("submit"),
+        if (submitted) "Update price" else "Submit price", class = "btn btn-primary"),
+      if (submitted) shiny::p(class = "pg-muted",
+        sprintf("✓ Submitted %s. You can change it until the round closes.",
+                money0(sub$price[1])))))
+}
+
+pl_result <- function(p, st, r) {
+  rnd <- st$session$current_round
+  if (is.null(r)) return(pl_card(sprintf("Round %d results", rnd),
+    "Your market wasn't scored this round."))
+  if (isTRUE(r$no_submission == 1))
+    return(pl_card(sprintf("Round %d results", rnd),
+      sprintf("You didn't submit a price, so you were out of the market — no sales, $0 this round. Cumulative profit: %s.",
+              money0(r$cumulative_profit))))
+  rival_txt <- if (is.na(r$rival_price)) "no submission" else money0(r$rival_price)
+  shiny::div(class = "card",
+    shiny::div(class = "card-header", sprintf("Round %d results", rnd)),
+    shiny::div(class = "card-body",
+      stat_block("Your price",   money0(r$price)),
+      stat_block("Rival price",  rival_txt),
+      stat_block("Units sold",   num1(r$quantity)),
+      stat_block("Round profit", money0(r$profit)),
+      shiny::p(class = "pg-muted", sprintf("Cumulative profit: %s", money0(r$cumulative_profit))),
+      shiny::p("Waiting for the next round…")))
+}
+
+pl_finished <- function(p, st) {
+  mine <- st$results[st$results$player_id == p$player_id, , drop = FALSE]
+  mine <- mine[order(mine$round), ]
+  tbl <- data.frame(
+    Round        = mine$round,
+    `Your price` = vapply(mine$price, money0, ""),
+    `Rival price`= vapply(mine$rival_price, money0, ""),
+    Profit       = vapply(mine$profit, money0, ""),
+    Cumulative   = vapply(mine$cumulative_profit, money0, ""),
+    check.names = FALSE)
+  total <- if (nrow(mine)) max(mine$cumulative_profit) else 0
+  shiny::div(class = "card",
+    shiny::div(class = "card-header", "Game over"),
+    shiny::div(class = "card-body",
+      shiny::div(class = "pg-big", sprintf("Total profit: %s", money0(total))),
+      html_table(tbl)))
+}
