@@ -218,6 +218,7 @@ Environment variables (all optional):
 | `PRICING_ADMIN_KEY` | `admin` | app |
 | `PRICING_GAMES` | `config/games.yaml` | app |
 | `PRICING_PORT` | `3838` | `scripts/run_app.R` |
+| `PRICING_DEV` | off | `run_app.R` — `1` turns on hot-reload (re-sources the app + refreshes every browser on save; **dev only**) |
 | `PLAYTEST_NAMES` | 8-name roster | `playtest_bot.R` |
 | `PLAYTEST_MINDELAY` / `PLAYTEST_MAXDELAY` | `2` / `18` | `playtest_bot.R` |
 
