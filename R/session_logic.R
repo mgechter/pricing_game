@@ -179,7 +179,10 @@ sl_time_left <- function(s) {
 
 # --- submissions --------------------------------------------------------------
 
-sl_submit <- function(con, session_id, player_id, round, price, rationale = "") {
+# `confirm = TRUE` marks the round done for this student (sticky — a later
+# auto-save with confirm = FALSE does not clear it).
+sl_submit <- function(con, session_id, player_id, round, price, rationale = "",
+                      confirm = FALSE) {
   s <- sl_session(con, session_id)
   if (is.null(s)) stop("no such session", call. = FALSE)
   if (s$phase != "open") stop("the round is not open for submissions", call. = FALSE)
@@ -192,12 +195,14 @@ sl_submit <- function(con, session_id, player_id, round, price, rationale = "") 
   if (is.na(price) || price < 0) stop("enter a price of 0 or more", call. = FALSE)
 
   db_run(con,
-    "INSERT INTO submissions (session_id, round, player_id, price, rationale, carried, submitted_at)
-     VALUES (?, ?, ?, ?, ?, 0, ?)
+    "INSERT INTO submissions (session_id, round, player_id, price, rationale, carried, confirmed, submitted_at)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?)
      ON CONFLICT(session_id, round, player_id)
-     DO UPDATE SET price = excluded.price, rationale = excluded.rationale,
-                   carried = 0, submitted_at = excluded.submitted_at",
-    list(session_id, round, player_id, price, as.character(rationale %||% ""), now_epoch()))
+     DO UPDATE SET price = excluded.price, rationale = excluded.rationale, carried = 0,
+                   confirmed = MAX(submissions.confirmed, excluded.confirmed),
+                   submitted_at = excluded.submitted_at",
+    list(session_id, round, player_id, price, as.character(rationale %||% ""),
+         as.integer(isTRUE(confirm)), now_epoch()))
   invisible(TRUE)
 }
 
@@ -207,14 +212,19 @@ sl_round_status <- function(con, session_id) {
   expected <- db_query(con,
     "SELECT player_id, display_name FROM players
      WHERE session_id = ? AND market_id IS NOT NULL", list(session_id))
-  submitted <- db_query(con,
-    "SELECT player_id FROM submissions WHERE session_id = ? AND round = ?",
-    list(session_id, rnd))$player_id
+  subs <- db_query(con,
+    "SELECT player_id, confirmed FROM submissions WHERE session_id = ? AND round = ?",
+    list(session_id, rnd))
+  priced    <- expected$player_id %in% subs$player_id
+  confirmed <- expected$player_id %in% subs$player_id[subs$confirmed == 1]
   list(
-    round        = rnd,
-    n_expected   = nrow(expected),
-    n_submitted  = sum(expected$player_id %in% submitted),
-    missing      = expected$display_name[!expected$player_id %in% submitted]
+    round         = rnd,
+    n_expected    = nrow(expected),
+    n_priced      = sum(priced),
+    n_confirmed   = sum(confirmed),
+    n_submitted   = sum(priced),               # back-compat alias
+    unconfirmed   = expected$display_name[!confirmed],
+    missing       = expected$display_name[!priced]
   )
 }
 
@@ -410,7 +420,7 @@ sl_export_frame <- function(con, session_id) {
     "SELECT r.round, r.market_id, p.display_name, pl_firm.firm_label,
             r.price, r.rival_price, r.share, r.quantity, r.revenue,
             r.profit, r.cumulative_profit, r.no_submission,
-            s.rationale, s.carried
+            s.rationale, s.carried, s.confirmed
      FROM results r
      JOIN players p       ON p.player_id = r.player_id
      JOIN players pl_firm ON pl_firm.player_id = r.player_id

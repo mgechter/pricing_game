@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS submissions (
   price        REAL    NOT NULL,
   rationale    TEXT,
   carried      INTEGER NOT NULL DEFAULT 0,          -- 1 = auto carried-forward at scoring
+  confirmed    INTEGER NOT NULL DEFAULT 0,          -- 1 = student pressed Submit (done)
   submitted_at REAL    NOT NULL,
   PRIMARY KEY (session_id, round, player_id)
 );
@@ -71,7 +72,8 @@ DB_MIGRATIONS <- c(
   "ALTER TABLE sessions ADD COLUMN round_seconds INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE sessions ADD COLUMN auto_advance INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE sessions ADD COLUMN anonymous INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE sessions ADD COLUMN projector_view TEXT NOT NULL DEFAULT 'summary'"
+  "ALTER TABLE sessions ADD COLUMN projector_view TEXT NOT NULL DEFAULT 'summary'",
+  "ALTER TABLE submissions ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 0"
 )
 
 db_connect <- function(path) {

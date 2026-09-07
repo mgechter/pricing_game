@@ -125,7 +125,8 @@ repeat {
                       if (length(rival_id)) last_price(s$session_id, rival_id[1], rn) else NA_real_)
       why <- sample(RATIONALES, 1)
       tryCatch({
-        sl_submit(con, s$session_id, pl$player_id[i], rn, price, rationale = why)
+        sl_submit(con, s$session_id, pl$player_id[i], rn, price, rationale = why,
+                  confirm = TRUE)
         cat(sprintf("   %-8s $%-7s %s\n", pl$display_name[i], price,
                     if (nzchar(why)) paste0("— \"", why, "\"") else ""))
       }, error = function(e) NULL)

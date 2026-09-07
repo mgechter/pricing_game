@@ -74,11 +74,12 @@ ignored). If it ever gets orphaned: `kill $(lsof -ti tcp:3838)`.
    student's real prices (that student isn't scored twice). Nobody sits out.
 4. Each round: students enter a price and an optional "why this price?". It
    **auto-saves as they type**, so a typed-but-unsent price is never scored as a
-   no-show; they can keep changing it until the round closes. The rival is shown
-   only as "the other firm". An optional **round timer** shows a countdown on
-   every screen.
-5. Instructor watches the market grid fill (it updates live as students submit
-   *and* as they edit), then **Close & score round → Next round**.
+   no-show. **Submit** is a separate "I'm done" signal. Students can still change
+   a submitted price until the round closes. The rival is shown only as "the
+   other firm". An optional **round timer** shows a countdown on every screen.
+5. The market grid updates live — a **Done** ✓ per student who's hit Submit, plus
+   "N of M submitted (done)". When everyone's in, **Close & score round → Next
+   round**.
    - Missing a price → that student is scored **out of the market** ($0; the
      rival gets the sole-seller outcome). Tick **carry forward** first to reuse
      their previous-round price instead.

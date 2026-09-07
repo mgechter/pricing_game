@@ -37,13 +37,20 @@ New session columns: `round_started_at`, `round_seconds` (0 = off),
   isn't perpetually running. An `observe(invalidateLater(1000))` in the admin
   server calls `sl_should_auto_score()` once per round (guarded by a `last_auto`
   reactiveVal); needs the admin tab open.
-- **Never a no-show from typing:** the player's price box **auto-saves as they
-  type** (a `debounce(…, 1200)` on `input$price` / `input$rationale` →
-  `sl_submit`), independent of any timer. `pl_screen_key()` no longer includes
-  the student's own submission, so these constant writes don't rebuild the input;
-  a separate `save_status` textOutput shows "Saved: $X". As a backstop, in the
-  last ~5 s the player also force-sends whatever valid number is in the box
-  (per-round `auto_done` guard). An empty box is still left alone.
+- **Auto-save + explicit confirm.** The price box **auto-saves as they type**
+  (`debounce(…, 1200)` → `sl_submit(confirm = FALSE)`), independent of any timer,
+  so a typed-but-unsent price is never a no-show. The **Submit** button is a
+  separate "I'm done for this round" signal (`sl_submit(confirm = TRUE)`);
+  `submissions.confirmed` is sticky — a later auto-save keeps it via
+  `MAX(confirmed, excluded.confirmed)`. `pl_screen_key()` excludes the student's
+  own submission so the constant writes don't rebuild the input; a `save_status`
+  textOutput shows "Saved automatically…" vs "Submitted ✓ —…".
+- `sl_round_status()` now reports `n_confirmed` (the "are we ready" number),
+  `n_priced`, and `unconfirmed` names. The admin grid has a **Done** column
+  (✓ confirmed · … priced-not-confirmed) and the header reads
+  "N of M submitted (done)". Projector "N of M submitted" uses `n_confirmed`.
+- Backstop: in the last ~5 s the player still force-sends whatever valid number
+  is in the box (per-round `auto_done` guard); an empty box is left alone.
 - **`auto_advance`** (checkbox "Also advance to the next round automatically") is
   opt-in — it chains `sl_advance_round()` after the auto-score, for continuous
   flow in the last few rounds.

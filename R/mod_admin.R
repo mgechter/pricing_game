@@ -453,11 +453,16 @@ ad_market_table <- function(st) {
     if (!length(v) || is.na(v[1]) || !nzchar(trimws(v[1]))) return("")
     w <- trimws(v[1]); if (nchar(w) > 60) paste0(substr(w, 1, 57), "…") else w
   }
+  done_of <- function(id) {
+    row <- sub[sub$player_id == id, , drop = FALSE]
+    if (!nrow(row)) "" else if (isTRUE(row$confirmed[1] == 1)) "✓" else "…"
+  }
   data.frame(
     Market = p$market_id,
     Firm   = p$firm_label,
     Player = p$display_name,
     Price  = vapply(p$player_id, price_of, ""),
+    Done   = vapply(p$player_id, done_of, ""),
     Why    = vapply(p$player_id, why_of, ""),
     Profit = vapply(p$player_id, profit_of, ""),
     check.names = FALSE)
@@ -510,8 +515,11 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
     shiny::div(class = "card-body",
       shiny::div(class = "pg-big",
         sprintf("Round %d of %d — %s", s$current_round, s$n_rounds, phase)),
-      shiny::p(sprintf("%d of %d submitted.%s", rs$n_submitted, rs$n_expected,
-        if (length(rs$missing)) paste0("  Waiting on: ", paste(rs$missing, collapse = ", ")) else "")),
+      shiny::p(shiny::strong(sprintf("%d of %d submitted (done)", rs$n_confirmed, rs$n_expected)),
+        sprintf("  ·  %d have a price entered.%s", rs$n_priced,
+          if (length(rs$unconfirmed))
+            paste0("  Not yet submitted: ", paste(rs$unconfirmed, collapse = ", "))
+          else "  Everyone's in — close the round.")),
       timer_row,
       html_table(ad_market_table(st)),
       shadow_note,

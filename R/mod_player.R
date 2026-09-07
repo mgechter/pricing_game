@@ -65,17 +65,20 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
     shiny::updateQueryString(paste0("?t=", r$token), mode = "replace")
   })
 
+  # The Submit button = "I'm done for this round" (confirm), used by the
+  # instructor to know when to close.
   shiny::observeEvent(input$submit, {
     st <- state(); p <- me(); shiny::req(st, p)
     r <- tryCatch(sl_submit(con, st$session$session_id, p$player_id,
-                            st$session$current_round, input$price, input$rationale),
+                            st$session$current_round, input$price, input$rationale,
+                            confirm = TRUE),
                   error = function(e) e)
     if (inherits(r, "error")) shiny::showNotification(conditionMessage(r), type = "error")
-    else shiny::showNotification("Saved ✓", type = "message", duration = 2)
+    else shiny::showNotification("Submitted ✓", type = "message", duration = 2)
   })
 
   # Auto-save the box as they type (debounced) so a typed-but-unsent price is
-  # never scored as a no-show. The Submit button just sends it immediately.
+  # never scored as a no-show. Does not confirm.
   draft <- shiny::debounce(shiny::reactive(list(p = input$price, r = input$rationale)), 1200)
   shiny::observeEvent(draft(), {
     st <- state(); pl <- me()
@@ -90,16 +93,20 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
     if (!is.null(sub) && isTRUE(sub$price[1] == price) &&
         isTRUE((sub$rationale[1] %||% "") == (dd$r %||% ""))) return()   # unchanged
     tryCatch(sl_submit(con, st$session$session_id, pl$player_id,
-                       st$session$current_round, price, dd$r %||% ""),
+                       st$session$current_round, price, dd$r %||% "", confirm = FALSE),
              error = function(e) NULL)
   }, ignoreInit = TRUE)
 
   output$save_status <- shiny::renderText({
     sub <- my_submission()
-    if (is.null(sub)) "Not saved yet — type a price."
-    else sprintf("Saved: %s%s. Change it any time until the round closes.",
-                 money0(sub$price[1]),
-                 if (isTRUE(sub$carried[1] == 1)) " (carried from last round)" else "")
+    if (is.null(sub)) return("Nothing saved yet — type a price.")
+    carried <- if (isTRUE(sub$carried[1] == 1)) " (carried from last round)" else ""
+    if (isTRUE(sub$confirmed[1] == 1))
+      sprintf("Submitted ✓ — %s%s. You can still change it until the round closes.",
+              money0(sub$price[1]), carried)
+    else
+      sprintf("Saved automatically: %s%s. Click Submit when you're happy with it.",
+              money0(sub$price[1]), carried)
   })
 
   output$screen <- shiny::renderUI({
@@ -112,7 +119,7 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
     shiny::invalidateLater(1000)
     st <- state(); if (is.null(st)) return(NULL)
     countdown_tag(sl_time_left(st$session), size = "3.4rem",
-                  note = "round closes at 0:00 — a price in the box is sent automatically")
+                  note = "your price is saved as you type — Submit when you're set")
   })
 
   # In the last few seconds, auto-send whatever valid price is in the box so a
@@ -216,7 +223,8 @@ pl_round <- function(ns, p, st, sub) {
         value = if (is.na(last)) NULL else last, min = 0, step = 1),
       shiny::textAreaInput(ns("rationale"), "Why this price? (optional)",
         value = if (submitted) sub$rationale[1] else "", rows = 2),
-      shiny::actionButton(ns("submit"), "Save price", class = "btn btn-primary"),
+      shiny::actionButton(ns("submit"), "Submit — I'm done for this round",
+                          class = "btn btn-primary"),
       shiny::p(class = "pg-muted", style = "margin-top:.5rem;",
                shiny::textOutput(ns("save_status"), inline = TRUE))))
 }

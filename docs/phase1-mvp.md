@@ -36,9 +36,12 @@ Env vars: `PRICING_DB` (sqlite path, default `data/pricing_game.sqlite`),
    markets, fixed for the game. Odd headcount → the last player sits out (a bot /
    instructor firm comes in Phase 2).
 4. Each round: students enter a price (and an optional "why this price?"). It
-   **auto-saves as they type** (debounced) — the Save button just sends it now —
-   so a typed-but-unsent price is never scored as a no-show. They can keep
-   changing it until the round closes. Rival is shown only as "the other firm".
+   **auto-saves as they type** (debounced), so a typed-but-unsent price is never
+   scored as a no-show. **Submit** is a separate "I'm done for this round" signal
+   — the admin grid shows a ✓ per confirmed student and a "N of M submitted
+   (done)" count, so the instructor closes the round when everyone's in. Students
+   can still change a submitted price until the round closes. Rival is shown only
+   as "the other firm".
 5. Instructor watches the market grid fill in — it updates live as students
    submit *and* as they change an answer — then **Close & score round**.
 6. Students see their result card — price, rival price, units, round profit,

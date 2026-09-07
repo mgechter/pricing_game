@@ -84,7 +84,7 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
         shiny::h1(st$game$label),
         shiny::uiOutput(ns("timer"))),
       shiny::h2(sprintf("Round %d of %d — %s", s$current_round, s$n_rounds, s$phase)),
-      shiny::h2(sprintf("%d of %d submitted", rs$n_submitted, rs$n_expected)),
+      shiny::h2(sprintf("%d of %d submitted", rs$n_confirmed, rs$n_expected)),
       if (!have_results)
         shiny::h2("Results appear here once round 1 is scored.")
       else shiny::tagList(

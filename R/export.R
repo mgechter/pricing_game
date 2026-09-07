@@ -32,7 +32,7 @@ sl_export_bundle <- function(con, session_ids) {
 
     submissions[[length(submissions) + 1]] <- cbind(tag, db_query(con,
       "SELECT s.round, pl.market_id, pl.firm_label, pl.display_name,
-              s.price, s.rationale, s.carried, s.submitted_at
+              s.price, s.rationale, s.carried, s.confirmed, s.submitted_at
        FROM submissions s JOIN players pl ON pl.player_id = s.player_id
        WHERE s.session_id = ? ORDER BY s.round, pl.market_id, pl.firm_label",
       list(sid)), row.names = NULL)

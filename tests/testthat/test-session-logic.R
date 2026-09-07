@@ -210,6 +210,27 @@ test_that("round timer: set, count down, and flag auto-score at 0:00", {
   expect_false(sl_should_auto_score(sl_session(con, sid)))
 })
 
+test_that("confirm is sticky and round status separates priced vs confirmed", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  ids <- join(con, sid, c("a", "b", "c", "d"))
+  sl_start_game(con, sid, seed = 1)
+
+  sl_submit(con, sid, ids[1], 1, 30)                       # auto-save, not confirmed
+  sl_submit(con, sid, ids[2], 1, 40, confirm = TRUE)       # confirmed
+  rs <- sl_round_status(con, sid)
+  expect_equal(rs$n_priced, 2)
+  expect_equal(rs$n_confirmed, 1)
+  expect_true("a" %in% rs$unconfirmed && !("b" %in% rs$unconfirmed))
+
+  sl_submit(con, sid, ids[1], 1, 25, confirm = TRUE)       # a confirms
+  sl_submit(con, sid, ids[1], 1, 22)                       # ...then edits again (no confirm arg)
+  row <- db_one(con, "SELECT price, confirmed FROM submissions WHERE session_id=? AND round=1 AND player_id=?",
+                list(sid, ids[1]))
+  expect_equal(row$price, 22)                              # price updated
+  expect_equal(row$confirmed, 1)                           # confirm stays sticky
+})
+
 test_that("anonymous + projector-view settings round-trip", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)

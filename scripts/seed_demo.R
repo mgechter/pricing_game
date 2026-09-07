@@ -98,7 +98,7 @@ play_session <- function(class_label, game_id, roster) {
       for (i in seq_len(nrow(firms))) {
         if (runif(1) < 0.02) next                          # ~2% forget a round
         sl_submit(con, sid, firms$player_id[i], r, pm[r, i],
-                  rationale = sample(RATIONALES, 1))
+                  rationale = sample(RATIONALES, 1), confirm = TRUE)
       }
     }
     sl_score_round(con, sid, carry_forward = FALSE)
