@@ -180,6 +180,9 @@ sl_set_prediction <- function(con, session_id, player_id, qid, answer) {
   if (is.null(s)) stop("no such session", call. = FALSE)
   if (s$phase != "open" || s$current_round != 1)
     stop("predictions are only open before round 1", call. = FALSE)
+  answer <- as.character(answer)
+  if (length(answer) != 1 || is.na(answer) || !nzchar(trimws(answer)))
+    stop("empty prediction answer", call. = FALSE)
   db_run(con,
     "INSERT INTO predictions (session_id, player_id, qid, answer, answered_at)
      VALUES (?, ?, ?, ?, ?)

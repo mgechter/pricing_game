@@ -11,7 +11,7 @@
 
 sl_export_bundle <- function(con, session_ids) {
   session_ids <- as.integer(session_ids)
-  results <- submissions <- pairs <- benchmarks <- list()
+  results <- submissions <- pairs <- benchmarks <- predictions <- list()
 
   for (sid in session_ids) {
     s <- sl_session(con, sid)
@@ -21,6 +21,18 @@ sl_export_bundle <- function(con, session_ids) {
     tag <- data.frame(session_id = sid, game_id = s$game_id,
                       game_label = g$label %||% s$game_id,
                       stringsAsFactors = FALSE)
+
+    qmeta <- do.call(rbind, lapply(game_predictions(g), function(q)
+      data.frame(qid = q$id, prompt = q$prompt, type = q$type,
+                 reference = q$reference, stringsAsFactors = FALSE)))
+    prd <- db_query(con,
+      "SELECT pl.display_name, pl.market_id, pl.firm_label, pr.qid, pr.answer, pr.answered_at
+       FROM predictions pr JOIN players pl ON pl.player_id = pr.player_id
+       WHERE pr.session_id = ? ORDER BY pr.player_id, pr.qid", list(sid))
+    if (nrow(prd)) {
+      if (!is.null(qmeta)) prd <- merge(prd, qmeta, by = "qid", all.x = TRUE)
+      predictions[[length(predictions) + 1]] <- cbind(tag, prd, row.names = NULL)
+    }
 
     results[[length(results) + 1]] <- cbind(tag, db_query(con,
       "SELECT r.round, r.market_id, pl.firm_label, pl.display_name,
@@ -63,12 +75,14 @@ sl_export_bundle <- function(con, session_ids) {
   }
 
   bind <- function(x) if (length(x)) do.call(rbind, x) else data.frame()
-  list(
+  out <- list(
     results_long = bind(results),
     submissions  = bind(submissions),
     pairs        = bind(pairs),
     benchmarks   = bind(benchmarks)
   )
+  if (length(predictions)) out$predictions <- bind(predictions)
+  out
 }
 
 write_bundle_zip <- function(bundle, zip_path) {
@@ -86,9 +100,13 @@ write_bundle_zip <- function(bundle, zip_path) {
     "results_long.csv  one row per player per round (price, rival price, share,",
     "                  quantity, revenue, profit, cumulative_profit, no_submission)",
     "submissions.csv   the raw price each player entered each round; carried = 1",
-    "                  (carried forward), 2 (scored as no-show)",
-    "pairs.csv         who was in each market / firm",
-    "benchmarks.csv    per session: game params and the NE / collusive / monopoly prices"
+    "                  (carried forward), 2 (scored as no-show); confirmed = 1 if",
+    "                  the student pressed Submit",
+    "pairs.csv         who was in each market / firm (shadow_of = host name)",
+    "benchmarks.csv    per session: game params and the NE / collusive / monopoly prices",
+    if ("predictions" %in% names(bundle))
+      "predictions.csv   each student's pre-game predictions (qid, prompt, reference, answer)"
+      else NULL
   ), readme)
   files <- c(files, readme)
   zip::zip(zip_path, files = basename(files), root = dir)
@@ -96,7 +114,8 @@ write_bundle_zip <- function(bundle, zip_path) {
 }
 
 write_bundle_xlsx <- function(bundle, xlsx_path) {
-  writexl::write_xlsx(bundle[c("results_long", "submissions", "pairs", "benchmarks")],
-                      path = xlsx_path)
+  writexl::write_xlsx(bundle[intersect(
+    c("results_long", "submissions", "pairs", "benchmarks", "predictions"),
+    names(bundle))], path = xlsx_path)
   xlsx_path
 }

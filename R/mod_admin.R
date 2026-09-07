@@ -264,6 +264,16 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
                `Market profit` = vapply(lb$market_profit, money0, ""), check.names = FALSE)
   }, striped = TRUE, width = "100%")
 
+  db_pred <- shiny::reactive({ d <- dbrief(); if (is.null(d)) NULL else dbf_predictions(d) })
+  output$db_pred_plots <- shiny::renderPlot({
+    items <- shiny::req(db_pred()); shiny::req(length(items) > 0)
+    plot_predictions_grid(items)
+  })
+  output$db_pred_table <- shiny::renderTable({
+    d <- shiny::req(dbrief()); dbf_prediction_table(d)
+  }, striped = TRUE, width = "100%", na = "—")
+  output$dl_pred <- gg_png(function() plot_predictions_grid(dbf_predictions(dbrief())), h = 7)
+
   output$dl_figpack <- shiny::downloadHandler(
     filename = function() sprintf("pricing_game_figs_session_%s.zip", debrief_sid() %||% "x"),
     content  = function(file) {
@@ -621,11 +631,21 @@ ad_debrief <- function(ns, d, sessions, sid, fr) {
       shiny::plotOutput(ns("db_br"), height = "380px"),
       shiny::downloadButton(ns("dl_br"), "PNG", class = "btn btn-sm btn-outline-secondary")))
 
+  has_pred <- !is.null(d$predictions) && nrow(d$predictions) > 0
+  pred_card <- if (has_pred) shiny::div(class = "card",
+    shiny::div(class = "card-header", "Predictions vs. what happened"),
+    shiny::div(class = "card-body",
+      shiny::plotOutput(ns("db_pred_plots"), height = "620px"),
+      shiny::downloadButton(ns("dl_pred"), "PNG", class = "btn btn-sm btn-outline-secondary"),
+      shiny::h6("Per-student", style = "margin-top:1rem;"),
+      shiny::tableOutput(ns("db_pred_table"))))
+
   shiny::tagList(
     picker,
     shiny::div(class = "card",
       shiny::div(class = "card-header", "Teachable moments"),
       shiny::div(class = "card-body", shiny::tableOutput(ns("db_flags")))),
+    pred_card,
     fig_card("Price paths", "db_price", "dl_price", 460),
     fig_card("Average price per round", "db_avg", "dl_avg", 360),
     br_card,

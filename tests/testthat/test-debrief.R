@@ -69,6 +69,38 @@ test_that("plot builders return ggplot objects; best-response guards bad input",
   expect_error(plot_best_response(d, 999, 2, "Firm A"), "isn't available")
 })
 
+test_that("dbf_predictions summarises answers and computes actuals", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  ids <- join(con, sid, c("A", "B", "C", "D"))
+  sl_start_game(con, sid, seed = 1)
+  g <- sl_game(sl_session(con, sid))
+  for (pid in ids) for (q in game_predictions(g))
+    sl_set_prediction(con, sid, pid, q$id,
+                      if (q$type == "numeric") as.character(30 + pid)
+                      else if (q$type == "choice") q$choices[1] else "because")
+  play_out(con, sid, 10)
+
+  d  <- dbf_load(con, sid)
+  it <- dbf_predictions(d)
+  ids_seen <- vapply(it, function(x) x$question$id, "")
+  expect_true(all(c("own_r1", "eq_guess", "br_50", "can_hold") %in% ids_seen))
+
+  eqg <- it[[which(ids_seen == "eq_guess")]]
+  expect_equal(eqg$actual, 0)                      # bertrand NE / reference
+  br  <- it[[which(ids_seen == "br_50")]]
+  expect_equal(br$actual, 49)
+  own <- it[[which(ids_seen == "own_r1")]]
+  expect_true(!is.null(own$per_student))
+  expect_true(all(own$per_student$actual == 10))   # everyone priced 10 in round 1
+
+  expect_s3_class(plot_predictions_grid(it), "ggplot")
+
+  tbl <- dbf_prediction_table(d)
+  expect_true(all(c("own_r1", "can_hold", "actual_r1", "total_profit") %in% names(tbl)))
+  expect_equal(nrow(tbl), 4)
+})
+
 test_that("debrief_write_figs writes the standard PNG set", {
   con <- fresh_db()
   sid <- sl_create_session(con, "hotelling_high", GAMES_PATH)

@@ -27,6 +27,24 @@ test_that("sl_export_bundle produces the four tidy tables", {
   expect_equal(b$benchmarks$monopoly, 50)
 })
 
+test_that("predictions land in the bundle when present", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  ids <- join(con, sid, c("A", "B"))
+  sl_start_game(con, sid, seed = 1)
+  g <- sl_game(sl_session(con, sid))
+  for (pid in ids) for (q in game_predictions(g))
+    sl_set_prediction(con, sid, pid, q$id,
+                      if (q$type == "numeric") "25" else if (q$type == "choice") q$choices[1] else "x")
+  play_out(con, sid, 20)
+
+  b <- sl_export_bundle(con, sid)
+  expect_true("predictions" %in% names(b))
+  expect_true(all(c("display_name", "qid", "prompt", "answer") %in% names(b$predictions)))
+  z <- write_bundle_zip(b, tempfile(fileext = ".zip"))
+  expect_true("predictions.csv" %in% zip::zip_list(z)$filename)
+})
+
 test_that("the pairs table names each shadow's host", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)

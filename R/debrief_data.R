@@ -34,20 +34,29 @@ dbf_load <- function(con, session_id) {
      WHERE s.session_id = ? ORDER BY s.round, p.market_id, p.firm_label",
     list(session_id))
 
+  predictions <- db_query(con,
+    "SELECT pr.player_id, p.display_name, pr.qid, pr.answer
+     FROM predictions pr JOIN players p ON p.player_id = pr.player_id
+     WHERE pr.session_id = ?", list(session_id))
+
   list(session = s, game = game,
        model = game$demand$model, params = game$demand$params,
        benchmarks = game$benchmarks,
-       players = players, results = results, submissions = submissions)
+       players = players, results = results, submissions = submissions,
+       predictions = predictions)
 }
 
 # Same shape, from an unzipped export bundle (for offline use in debrief.qmd).
 dbf_load_bundle <- function(dir, session_id = NULL) {
-  rd <- function(f) utils::read.csv(file.path(dir, f), stringsAsFactors = FALSE)
+  rd <- function(f) if (file.exists(file.path(dir, f)))
+    utils::read.csv(file.path(dir, f), stringsAsFactors = FALSE) else NULL
   bm  <- rd("benchmarks.csv")
   if (is.null(session_id)) session_id <- bm$session_id[1]
   bm  <- bm[bm$session_id == session_id, ][1, ]
   res <- rd("results_long.csv"); res <- res[res$session_id == session_id, ]
   sub <- rd("submissions.csv");  sub <- sub[sub$session_id == session_id, ]
+  prd <- rd("predictions.csv")
+  prd <- if (is.null(prd)) data.frame() else prd[prd$session_id == session_id, ]
   params <- list(V = bm$V, t = bm$t, L = bm$L, M = bm$M, mc = bm$mc,
                  choke = bm$choke, coverage_decay = isTRUE(as.logical(bm$coverage_decay)))
   params <- params[!vapply(params, function(x) length(x) == 0 || is.na(x), logical(1))]
@@ -57,7 +66,7 @@ dbf_load_bundle <- function(dir, session_id = NULL) {
     model = bm$model, params = params,
     benchmarks = list(ne = bm$ne, collusive = bm$collusive, monopoly = bm$monopoly),
     players = unique(res[c("market_id", "firm_label", "display_name")]),
-    results = res, submissions = sub)
+    results = res, submissions = sub, predictions = prd)
 }
 
 # --- teachable moments ---------------------------------------------------------
@@ -143,6 +152,69 @@ dbf_flags <- function(d, top_n = 2L) {
 }
 
 # --- leaderboards -----------------------------------------------------------
+
+# --- predictions -----------------------------------------------------------
+
+# One entry per prediction question: the question metadata, the class's answers,
+# a computed class-level "actual" where we have one, and a per-student
+# predicted-vs-actual frame for the "your round-1 price" question.
+dbf_predictions <- function(d) {
+  pr <- d$predictions
+  if (is.null(pr) || !nrow(pr)) return(list())
+  qs <- game_predictions(d$game)
+
+  qmeta <- function(qid) {
+    hit <- Filter(function(q) identical(q$id, qid), qs)
+    if (length(hit)) return(hit[[1]])
+    row <- pr[pr$qid == qid, ][1, ]
+    list(id = qid, type = row$type %||% "text", prompt = row$prompt %||% qid,
+         reference = suppressWarnings(as.numeric(row$reference %||% NA)), choices = NULL)
+  }
+
+  res <- d$results
+  final_round <- suppressWarnings(max(res$round, na.rm = TRUE))
+  class_final <- mean(res$price[res$round == final_round & !is.na(res$price)])
+  r1_price <- function(nm) { v <- res$price[res$display_name == nm & res$round == 1]
+                             if (length(v)) v[1] else NA_real_ }
+
+  lapply(unique(pr$qid), function(qid) {
+    q  <- qmeta(qid)
+    aa <- pr[pr$qid == qid, c("display_name", "answer")]
+    aa$answer_num <- suppressWarnings(as.numeric(aa$answer))
+    ref <- q$reference %||% NA_real_
+    actual <- switch(qid,
+      class_final = class_final,
+      eq_guess    = if (is.finite(ref)) ref else d$benchmarks$ne,
+      ne_guess    = if (is.finite(ref)) ref else d$benchmarks$ne,
+      if (is.finite(ref)) ref else NA_real_)
+    list(
+      question = q,
+      answers  = aa,
+      actual   = actual,
+      per_student = if (identical(qid, "own_r1"))
+        data.frame(display_name = aa$display_name, predicted = aa$answer_num,
+                   actual = vapply(aa$display_name, r1_price, numeric(1)),
+                   stringsAsFactors = FALSE)
+        else NULL)
+  })
+}
+
+# Wide per-student table: every prediction + their actual round-1 price + profit.
+dbf_prediction_table <- function(d) {
+  pr <- d$predictions
+  if (is.null(pr) || !nrow(pr)) return(data.frame())
+  w <- stats::reshape(pr[c("display_name", "qid", "answer")],
+                      idvar = "display_name", timevar = "qid", direction = "wide")
+  names(w) <- sub("^answer\\.", "", names(w))
+  res <- d$results
+  w$actual_r1 <- vapply(w$display_name, function(nm) {
+    v <- res$price[res$display_name == nm & res$round == 1]
+    if (length(v)) v[1] else NA_real_
+  }, numeric(1))
+  w$total_profit <- vapply(w$display_name, function(nm)
+    sum(res$profit[res$display_name == nm], na.rm = TRUE), numeric(1))
+  w[order(-w$total_profit), ]
+}
 
 dbf_leaderboards <- function(d) {
   res <- d$results

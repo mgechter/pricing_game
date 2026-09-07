@@ -103,6 +103,49 @@ plot_best_response <- function(d, market_id, round, focal = "Firm A") {
     PG_THEME()
 }
 
+# One prediction question. own_r1 -> predicted-vs-actual scatter; choice -> bar;
+# other numeric -> histogram with theory / realised-outcome lines.
+plot_prediction <- function(item) {
+  q  <- item$question
+  aa <- item$answers
+  ttl <- if (nchar(q$prompt) > 70) paste0(substr(q$prompt, 1, 67), "…") else q$prompt
+
+  if (!is.null(item$per_student)) {
+    ps <- item$per_student[is.finite(item$per_student$predicted) &
+                           is.finite(item$per_student$actual), ]
+    return(ggplot(ps, aes(predicted, actual)) +
+      geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey60") +
+      geom_point(size = 2, colour = "#4c78a8") +
+      labs(x = "predicted", y = "what you actually did", title = ttl) + PG_THEME())
+  }
+
+  if (identical(q$type, "choice") || all(is.na(aa$answer_num))) {
+    tab <- as.data.frame(table(answer = aa$answer), stringsAsFactors = FALSE)
+    return(ggplot(tab, aes(stats::reorder(answer, -Freq), Freq)) +
+      geom_col(fill = "#4c78a8") +
+      labs(x = NULL, y = "students", title = ttl) + PG_THEME())
+  }
+
+  ln <- data.frame(x = c(item$actual, q$reference),
+                   label = factor(c("Actual", "Theory"), levels = c("Actual", "Theory")))
+  ln <- ln[is.finite(ln$x), , drop = FALSE]
+  p <- ggplot(aa[is.finite(aa$answer_num), ], aes(answer_num)) +
+    geom_histogram(bins = 15, fill = "#4c78a8", colour = "white")
+  if (nrow(ln))
+    p <- p + geom_vline(data = ln, aes(xintercept = x, colour = label), linewidth = 1) +
+      scale_colour_manual(values = c(Actual = "forestgreen", Theory = "grey30"))
+  p + labs(x = "predicted value", y = "students", colour = NULL, title = ttl) + PG_THEME()
+}
+
+plot_predictions_grid <- function(items) {
+  items <- Filter(function(it) !identical(it$question$type, "text"), items)
+  if (!length(items)) return(NULL)
+  plots <- lapply(items, plot_prediction)
+  if (requireNamespace("patchwork", quietly = TRUE))
+    patchwork::wrap_plots(plots, ncol = 2)
+  else plots[[1]]
+}
+
 # The standard figure set for a session, written as PNGs into `dir`.
 debrief_write_figs <- function(d, dir, width = 9, height = 5.5, dpi = 200) {
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)

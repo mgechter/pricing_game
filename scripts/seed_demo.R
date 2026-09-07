@@ -75,6 +75,17 @@ play_session <- function(class_label, game_id, roster) {
   pl <- sl_players(con, sid); pl <- pl[!is.na(pl$market_id), ]
   markets <- sort(unique(pl$market_id))
 
+  # each student makes their pre-game predictions (a spread of guesses)
+  for (pid in pl$player_id) for (q in game_predictions(g)) {
+    base <- if (is.finite(q$reference)) q$reference
+            else g$benchmarks$monopoly %||% g$benchmarks$ne %||% 40
+    ans <- switch(q$type,
+      numeric = as.character(round(clamp(base + rnorm(1, 5, 20), 0, 260), 1)),
+      choice  = sample(q$choices, 1),
+      "prices will drift down as we compete")
+    sl_set_prediction(con, sid, pid, q$id, ans)
+  }
+
   pool <- switch(game_id,
     bertrand       = c("race", "race", "collude", "anchored"),
     hotelling_high = c("collude", "best_response", "best_response", "anchored"),
