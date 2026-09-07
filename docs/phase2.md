@@ -37,10 +37,13 @@ New session columns: `round_started_at`, `round_seconds` (0 = off),
   isn't perpetually running. An `observe(invalidateLater(1000))` in the admin
   server calls `sl_should_auto_score()` once per round (guarded by a `last_auto`
   reactiveVal); needs the admin tab open.
-- **Player auto-submit:** in the last ~5 s each player screen sends whatever
-  valid number is in the price box (if it wasn't already submitted), so a student
-  who typed a price but didn't hit Submit isn't scored as a no-show. An empty box
-  is left alone. Guarded by a per-round `auto_done` reactiveVal.
+- **Never a no-show from typing:** the player's price box **auto-saves as they
+  type** (a `debounce(…, 1200)` on `input$price` / `input$rationale` →
+  `sl_submit`), independent of any timer. `pl_screen_key()` no longer includes
+  the student's own submission, so these constant writes don't rebuild the input;
+  a separate `save_status` textOutput shows "Saved: $X". As a backstop, in the
+  last ~5 s the player also force-sends whatever valid number is in the box
+  (per-round `auto_done` guard). An empty box is still left alone.
 - **`auto_advance`** (checkbox "Also advance to the next round automatically") is
   opt-in — it chains `sl_advance_round()` after the auto-score, for continuous
   flow in the last few rounds.

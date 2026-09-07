@@ -72,9 +72,11 @@ ignored). If it ever gets orphaned: `kill $(lsof -ti tcp:3838)`.
    markets, fixed for the game. Odd headcount → the last student joins a market as
    a **shadow**: they submit prices and are scored one-on-one against a paired
    student's real prices (that student isn't scored twice). Nobody sits out.
-4. Each round: students enter a price and an optional "why this price?"; they can
-   change it until the round closes. The rival is shown only as "the other firm".
-   An optional **round timer** shows a countdown on every screen.
+4. Each round: students enter a price and an optional "why this price?". It
+   **auto-saves as they type**, so a typed-but-unsent price is never scored as a
+   no-show; they can keep changing it until the round closes. The rival is shown
+   only as "the other firm". An optional **round timer** shows a countdown on
+   every screen.
 5. Instructor watches the market grid fill (it updates live as students submit
    *and* as they edit), then **Close & score round → Next round**.
    - Missing a price → that student is scored **out of the market** ($0; the

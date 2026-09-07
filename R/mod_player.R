@@ -71,7 +71,35 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
                             st$session$current_round, input$price, input$rationale),
                   error = function(e) e)
     if (inherits(r, "error")) shiny::showNotification(conditionMessage(r), type = "error")
-    else shiny::showNotification("Submitted ✓", type = "message", duration = 2)
+    else shiny::showNotification("Saved ✓", type = "message", duration = 2)
+  })
+
+  # Auto-save the box as they type (debounced) so a typed-but-unsent price is
+  # never scored as a no-show. The Submit button just sends it immediately.
+  draft <- shiny::debounce(shiny::reactive(list(p = input$price, r = input$rationale)), 1200)
+  shiny::observeEvent(draft(), {
+    st <- state(); pl <- me()
+    if (is.null(st) || is.null(pl) || st$session$phase != "open") return()
+    dd    <- draft()
+    price <- suppressWarnings(as.numeric(dd$p))
+    sub   <- shiny::isolate(my_submission())
+    if (is.na(price) || price < 0) {                        # no usable price yet
+      if (is.null(sub)) return()                            # nothing to update
+      price <- sub$price[1]                                 # keep price, save rationale edit
+    }
+    if (!is.null(sub) && isTRUE(sub$price[1] == price) &&
+        isTRUE((sub$rationale[1] %||% "") == (dd$r %||% ""))) return()   # unchanged
+    tryCatch(sl_submit(con, st$session$session_id, pl$player_id,
+                       st$session$current_round, price, dd$r %||% ""),
+             error = function(e) NULL)
+  }, ignoreInit = TRUE)
+
+  output$save_status <- shiny::renderText({
+    sub <- my_submission()
+    if (is.null(sub)) "Not saved yet — type a price."
+    else sprintf("Saved: %s%s. Change it any time until the round closes.",
+                 money0(sub$price[1]),
+                 if (isTRUE(sub$carried[1] == 1)) " (carried from last round)" else "")
   })
 
   output$screen <- shiny::renderUI({
@@ -137,15 +165,15 @@ pl_screen <- function(ns, st, p, sub, res) {
       pl_card("Standby", "…"))
 }
 
-# A coarse identity for the student's screen. Must change when THIS student's own
-# view changes (phase, round, pairing, their own submission/result) and NOT when
-# another student acts — otherwise re-rendering wipes an in-progress price entry.
+# A coarse identity for the student's screen. Changes on phase / round / pairing
+# and when their result is (re)scored — deliberately NOT on their own submission
+# edits (auto-save writes on every keystroke) or on another student's activity,
+# either of which would rebuild the price input mid-type.
 pl_screen_key <- function(st, p, sub, res) {
   if (is.null(st)) return("no-game")
   if (is.null(p))  return(paste0("join|", st$session$phase))
   paste(st$session$phase, st$session$current_round,
         p$market_id %||% "NA", p$firm_label %||% "NA",
-        if (is.null(sub)) "-" else paste(sub$price[1], sub$rationale[1], sub$submitted_at[1]),
         if (is.null(res)) "-" else res$computed_at[1],
         sep = "|")
 }
@@ -188,11 +216,9 @@ pl_round <- function(ns, p, st, sub) {
         value = if (is.na(last)) NULL else last, min = 0, step = 1),
       shiny::textAreaInput(ns("rationale"), "Why this price? (optional)",
         value = if (submitted) sub$rationale[1] else "", rows = 2),
-      shiny::actionButton(ns("submit"),
-        if (submitted) "Update price" else "Submit price", class = "btn btn-primary"),
-      if (submitted) shiny::p(class = "pg-muted",
-        sprintf("✓ Submitted %s. You can change it until the round closes.",
-                money0(sub$price[1])))))
+      shiny::actionButton(ns("submit"), "Save price", class = "btn btn-primary"),
+      shiny::p(class = "pg-muted", style = "margin-top:.5rem;",
+               shiny::textOutput(ns("save_status"), inline = TRUE))))
 }
 
 pl_result <- function(p, st, r) {
