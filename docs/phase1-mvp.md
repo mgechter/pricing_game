@@ -2,8 +2,8 @@
 
 A working Shiny app: students join, submit a price each round, and see their
 result; the instructor runs the round loop and exports the data. All three games
-work (Bertrand + both Hotelling); the round loop, pairing, and scoring are the
-same code the parity test validates.
+work (Bertrand + both Hotelling); the round loop, pairing, and scoring run on
+the same engine functions the unit tests cover.
 
 ## Run it
 

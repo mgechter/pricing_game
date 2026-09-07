@@ -265,6 +265,5 @@ tests/testthat/        test suite
 Rscript scripts/run_tests.R
 ```
 
-Covers the engine (with an exact parity check against the 2026 spreadsheet
-results), the game loop, the export bundle, the debrief data/plots, and every
-UI screen builder.
+Covers the engine, the game loop, the export bundle, the debrief data/plots,
+and every UI screen builder.

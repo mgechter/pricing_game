@@ -4,7 +4,7 @@
 # here, so the live game, its benchmarks, and the slides cannot drift apart.
 #
 # Fields
-#   id         unique key (referenced by the app and the parity test)
+#   id         unique key (referenced by the app and the debrief)
 #   label      shown to players and admin
 #   rounds     number of rounds — a parameter, not hard-coded
 #   pairing    fixed | random_each_round | random_once
@@ -25,8 +25,7 @@
 #   `capture_gap`.  Here `t` is the spreadsheet's $O$3 cell and L its "/100".
 #   The 2026 sheet ran  t (O3) = 2  in BOTH differentiated games (so they were
 #   mechanically identical; NE = mc + t*L = $200).  The values below are the
-#   *intended* design — genuine high vs low differentiation.  The parity test
-#   (R/parity.R) overrides back to t = 2 to reproduce the 2026 numbers exactly.
+#   *intended* design — genuine high vs low differentiation.
 
 games:
   - id: bertrand
