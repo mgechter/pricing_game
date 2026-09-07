@@ -5,3 +5,6 @@
 data/
 *.sqlite
 *.sqlite3
+figs/
+debrief.html
+debrief_files/

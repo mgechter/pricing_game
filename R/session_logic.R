@@ -97,7 +97,14 @@ sl_add_player <- function(con, session_id, display_name) {
     list(session_id, name))
   if (!is.null(dup)) stop("that name is already taken", call. = FALSE)
 
-  token <- random_token()
+  token <- NULL
+  for (i in 1:10) {
+    cand <- random_token()
+    if (is.null(db_one(con, "SELECT 1 FROM players WHERE token = ?", list(cand)))) {
+      token <- cand; break
+    }
+  }
+  if (is.null(token)) stop("could not allocate a unique token", call. = FALSE)
   db_run(con,
     "INSERT INTO players (session_id, display_name, token, joined_at) VALUES (?, ?, ?, ?)",
     list(session_id, name, token, now_epoch()))

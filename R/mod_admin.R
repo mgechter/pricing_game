@@ -148,12 +148,112 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     shiny::showNotification("Session deleted.", type = "message")
   })
 
+  # export bundle for the sessions ticked in History
+  bundle_ids <- function() as.integer(shiny::req(input$hist_pick))
+  output$dl_bundle_zip <- shiny::downloadHandler(
+    filename = function() sprintf("pricing_game_bundle_%s.zip", Sys.Date()),
+    content  = function(file) write_bundle_zip(sl_export_bundle(con, bundle_ids()), file))
+  output$dl_bundle_xlsx <- shiny::downloadHandler(
+    filename = function() sprintf("pricing_game_bundle_%s.xlsx", Sys.Date()),
+    content  = function(file) write_bundle_xlsx(sl_export_bundle(con, bundle_ids()), file))
+
+  # ---- debrief ----------------------------------------------------------------
+  shiny::observeEvent(input$nav_debrief, view_rv("debrief"))
+  debrief_sid <- shiny::reactiveVal(NULL)
+  dbf_tick    <- shiny::reactiveVal(0)
+
+  scored_sessions <- function() {
+    s <- sl_list_sessions(con)
+    s[s$n_result_rows > 0, , drop = FALSE]
+  }
+  shiny::observeEvent(view_rv(), {
+    if (view_rv() != "debrief") return()
+    if (is.null(debrief_sid())) {
+      s <- scored_sessions()
+      if (nrow(s)) debrief_sid(s$session_id[1])
+    }
+  })
+  shiny::observeEvent(input$debrief_pick, debrief_sid(as.integer(input$debrief_pick)))
+  shiny::observeEvent(input$debrief_refresh, dbf_tick(dbf_tick() + 1))
+
+  dbrief <- shiny::reactive({
+    dbf_tick(); sid <- debrief_sid(); if (is.null(sid)) return(NULL)
+    tryCatch(dbf_load(con, sid), error = function(e) NULL)
+  })
+  flags <- shiny::reactive({ d <- dbrief(); if (is.null(d)) NULL else dbf_flags(d) })
+
+  # keep the best-response picker in range for the chosen session
+  br_market <- shiny::reactive({
+    d <- dbrief(); shiny::req(d)
+    as.integer(input$br_market %||% min(d$results$market_id))
+  })
+
+  shiny::observeEvent(input$flag_pick, {
+    fr <- flags(); shiny::req(fr, input$flag_pick != "")
+    row <- fr[as.integer(input$flag_pick), ]
+    if (row$firm_label %in% c("Firm A", "Firm B")) {
+      shiny::updateSelectInput(session, "br_market", selected = row$market_id)
+      shiny::updateSelectInput(session, "br_round",  selected = row$round)
+      shiny::updateRadioButtons(session, "br_firm",  selected = row$firm_label)
+    }
+  })
+
+  gg_png <- function(expr, w = 9, h = 5.5) shiny::downloadHandler(
+    filename = function() "figure.png",
+    content  = function(file) {
+      dev <- if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png else grDevices::png
+      ggplot2::ggsave(file, expr(), device = dev, width = w, height = h, dpi = 200)
+    })
+
+  output$db_price   <- shiny::renderPlot(plot_price_paths(shiny::req(dbrief()), isTRUE(input$db_anon)))
+  output$db_avg     <- shiny::renderPlot(plot_avg_price(shiny::req(dbrief())))
+  output$db_profit  <- shiny::renderPlot(plot_profit_paths(shiny::req(dbrief()), isTRUE(input$db_anon)))
+  output$db_br <- shiny::renderPlot({
+    d <- shiny::req(dbrief())
+    plot_best_response(d, br_market(),
+                       as.integer(input$br_round %||% min(d$results$round)),
+                       input$br_firm %||% "Firm A")
+  })
+  output$dl_price  <- gg_png(function() plot_price_paths(dbrief(), isTRUE(input$db_anon)))
+  output$dl_avg    <- gg_png(function() plot_avg_price(dbrief()), h = 4.5)
+  output$dl_profit <- gg_png(function() plot_profit_paths(dbrief(), isTRUE(input$db_anon)))
+  output$dl_br     <- gg_png(function() plot_best_response(dbrief(), br_market(),
+                        as.integer(input$br_round), input$br_firm %||% "Firm A"), h = 4.5)
+
+  output$db_flags   <- shiny::renderTable(
+    { fr <- flags(); if (is.null(fr) || !nrow(fr)) return(NULL)
+      data.frame(Flag = fr$kind, Market = fr$market_id, Round = fr$round, What = fr$detail) },
+    striped = TRUE, width = "100%")
+  output$db_lb_indiv <- shiny::renderTable({
+    d <- shiny::req(dbrief()); lb <- dbf_leaderboards(d)$individuals
+    data.frame(Player = lb$display_name, Market = lb$market_id, Firm = lb$firm_label,
+               `Total profit` = vapply(lb$total_profit, money0, ""),
+               `vs. all-NE`   = vapply(lb$vs_ne, function(x) sprintf("%s%s", if (x >= 0) "+" else "-", money0(abs(x))), ""),
+               check.names = FALSE)
+  }, striped = TRUE, width = "100%")
+  output$db_lb_mkt <- shiny::renderTable({
+    d <- shiny::req(dbrief()); lb <- dbf_leaderboards(d)$markets
+    data.frame(Market = lb$market_id, `Firm A` = lb$`Firm A`, `Firm B` = lb$`Firm B`,
+               `Market profit` = vapply(lb$market_profit, money0, ""), check.names = FALSE)
+  }, striped = TRUE, width = "100%")
+
+  output$dl_figpack <- shiny::downloadHandler(
+    filename = function() sprintf("pricing_game_figs_session_%s.zip", debrief_sid() %||% "x"),
+    content  = function(file) {
+      d <- shiny::req(dbrief())
+      dir <- tempfile("figs_"); files <- debrief_write_figs(d, dir)
+      zip::zip(file, files = basename(files), root = dir)
+    })
+
   output$screen <- shiny::renderUI({
     hist_tick()
     st <- state()
     nav <- ad_nav(ns, view_rv())
     if (identical(view_rv(), "history"))
       return(shiny::tagList(nav, ad_history(ns, sl_list_sessions(con))))
+    if (identical(view_rv(), "debrief"))
+      return(shiny::tagList(nav, ad_debrief(ns, dbrief(), scored_sessions(),
+                                            debrief_sid(), flags())))
 
     body <- if (is.null(st)) ad_create(ns, game_choices)
       else switch(st$session$phase,
@@ -171,9 +271,11 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
 ad_nav <- function(ns, view) {
   lk <- function(id, lbl, on) shiny::actionLink(ns(id), lbl,
     style = if (on) "font-weight:600; text-decoration:none;" else "text-decoration:none;")
+  sep <- shiny::HTML("&nbsp;&nbsp;|&nbsp;&nbsp;")
   shiny::div(style = "margin-bottom:1rem;",
-    lk("nav_run", "Run", view == "run"), shiny::HTML("&nbsp;&nbsp;|&nbsp;&nbsp;"),
-    lk("nav_history", "History", view == "history"))
+    lk("nav_run", "Run", view == "run"), sep,
+    lk("nav_history", "History", view == "history"), sep,
+    lk("nav_debrief", "Debrief", view == "debrief"))
 }
 
 ad_create <- function(ns, choices) shiny::div(class = "card",
@@ -212,6 +314,11 @@ ad_history <- function(ns, sess) {
         shiny::actionButton(ns(paste0("del_", sc)), "Delete",
                             class = "btn btn-sm btn-link text-danger")))
   }
+  scored <- sess[sess$n_result_rows > 0, , drop = FALSE]
+  choices <- stats::setNames(scored$session_id,
+    sprintf("#%d — %s (%s)", scored$session_id,
+            ifelse(is.na(scored$label), "unnamed", scored$label), scored$game_id))
+
   shiny::div(class = "card",
     shiny::div(class = "card-header", "Session history"),
     shiny::div(class = "card-body",
@@ -221,7 +328,17 @@ ad_history <- function(ns, sess) {
         shiny::tags$thead(shiny::tags$tr(lapply(
           c("#", "Label", "Game", "Status", "Players", "Result rows", "Created", ""),
           shiny::tags$th))),
-        shiny::tags$tbody(lapply(seq_len(nrow(sess)), function(i) row_ui(sess[i, ]))))))
+        shiny::tags$tbody(lapply(seq_len(nrow(sess)), function(i) row_ui(sess[i, ])))),
+      if (nrow(scored)) shiny::tagList(
+        shiny::hr(),
+        shiny::h6("Download a class bundle"),
+        shiny::p(class = "pg-muted",
+          "Tick the sessions from one class, then download a tidy CSV/Excel bundle for analysis."),
+        shiny::checkboxGroupInput(ns("hist_pick"), NULL, choices = choices, inline = TRUE),
+        shiny::downloadButton(ns("dl_bundle_zip"),  "Download bundle (ZIP)",
+                              class = "btn btn-sm btn-outline-primary"), " ",
+        shiny::downloadButton(ns("dl_bundle_xlsx"), "Download bundle (Excel)",
+                              class = "btn btn-sm btn-outline-primary"))))
 }
 
 ad_lobby <- function(ns, st, url) {
@@ -319,5 +436,73 @@ ad_finished <- function(ns, st) {
       shiny::downloadButton(ns("dl"), "Export CSV"), " ",
       shiny::actionButton(ns("newsession"), "New session", class = "btn btn-primary"),
       shiny::p(class = "pg-muted", style = "margin-top:.75rem;",
-        "This session is saved in History. Start a fresh one with “New session”.")))
+        "This session is saved in History. Open the Debrief tab for charts, or start a fresh game with “New session”.")))
+}
+
+# --- debrief -------------------------------------------------------------------
+
+ad_debrief <- function(ns, d, sessions, sid, fr) {
+  if (nrow(sessions) == 0)
+    return(shiny::div(class = "card", shiny::div(class = "card-body",
+      "No finished games to debrief yet. Run one from the Run tab.")))
+
+  choices <- stats::setNames(sessions$session_id,
+    sprintf("#%d — %s (%s)", sessions$session_id,
+            ifelse(is.na(sessions$label), "unnamed", sessions$label), sessions$game_id))
+  picker <- shiny::div(class = "card", shiny::div(class = "card-body",
+    shiny::fluidRow(
+      shiny::column(6, shiny::selectInput(ns("debrief_pick"), "Session",
+        choices = choices, selected = sid)),
+      shiny::column(3, shiny::checkboxInput(ns("db_anon"),
+        "Show as Firm A / B", value = FALSE)),
+      shiny::column(3, shiny::div(style = "margin-top:1.6rem;",
+        shiny::actionButton(ns("debrief_refresh"), "Refresh", class = "btn btn-sm btn-outline-secondary"), " ",
+        shiny::downloadButton(ns("dl_figpack"), "Figure pack (ZIP)", class = "btn btn-sm btn-outline-primary"))))))
+
+  if (is.null(d))
+    return(shiny::tagList(picker, shiny::div(class = "card",
+      shiny::div(class = "card-body", "Loading…"))))
+
+  fig_card <- function(title, plot_id, dl_id, height = 420) shiny::div(class = "card",
+    shiny::div(class = "card-header", title),
+    shiny::div(class = "card-body",
+      shiny::plotOutput(ns(plot_id), height = paste0(height, "px")),
+      shiny::downloadButton(ns(dl_id), "PNG", class = "btn btn-sm btn-outline-secondary")))
+
+  rounds  <- sort(unique(d$results$round))
+  markets <- sort(unique(d$results$market_id))
+  flag_choices <- c("—" = "")
+  if (!is.null(fr) && nrow(fr))
+    flag_choices <- c(flag_choices, stats::setNames(as.character(seq_len(nrow(fr))),
+      sprintf("Market %s, round %s — %s", fr$market_id, fr$round, fr$kind)))
+
+  br_card <- shiny::div(class = "card",
+    shiny::div(class = "card-header", "Best-response explorer"),
+    shiny::div(class = "card-body",
+      shiny::fluidRow(
+        shiny::column(3, shiny::selectInput(ns("br_market"), "Market", choices = markets)),
+        shiny::column(3, shiny::selectInput(ns("br_round"), "Round", choices = rounds,
+                                            selected = max(rounds))),
+        shiny::column(3, shiny::radioButtons(ns("br_firm"), "Firm",
+                                             choices = c("Firm A", "Firm B"), inline = TRUE)),
+        shiny::column(3, shiny::selectInput(ns("flag_pick"), "Jump to a flag",
+                                            choices = flag_choices))),
+      shiny::plotOutput(ns("db_br"), height = "380px"),
+      shiny::downloadButton(ns("dl_br"), "PNG", class = "btn btn-sm btn-outline-secondary")))
+
+  shiny::tagList(
+    picker,
+    shiny::div(class = "card",
+      shiny::div(class = "card-header", "Teachable moments"),
+      shiny::div(class = "card-body", shiny::tableOutput(ns("db_flags")))),
+    fig_card("Price paths", "db_price", "dl_price", 460),
+    fig_card("Average price per round", "db_avg", "dl_avg", 360),
+    br_card,
+    fig_card("Cumulative profit", "db_profit", "dl_profit", 460),
+    shiny::div(class = "card",
+      shiny::div(class = "card-header", "Leaderboard — players"),
+      shiny::div(class = "card-body", shiny::tableOutput(ns("db_lb_indiv")))),
+    shiny::div(class = "card",
+      shiny::div(class = "card-header", "Leaderboard — markets"),
+      shiny::div(class = "card-body", shiny::tableOutput(ns("db_lb_mkt")))))
 }

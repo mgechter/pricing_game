@@ -29,12 +29,23 @@ resolve_benchmarks <- function(game, method = c("numeric", "closed")) {
   b <- game$benchmarks %||% list()
 
   todo <- function(x) is.null(x) || identical(x, "compute")
-  ne_fn <- if (method == "numeric") ne_price_numeric        else ne_price
-  co_fn <- if (method == "numeric") collusive_price_numeric else collusive_price
+  # Snap a numeric solve back onto the closed form when they agree to <= $0.50 —
+  # keeps benchmark/reference-line values slide-clean (100, not 100.001).
+  snap <- function(num, closed) {
+    if (length(closed) != 1 || is.na(closed)) return(num)
+    if (abs(num - closed) <= 0.5) closed else num
+  }
+  ne_val <- function() if (method == "numeric")
+    snap(ne_price_numeric(model, params), tryCatch(ne_price(model, params), error = function(e) NA))
+    else ne_price(model, params)
+  co_val <- function() if (method == "numeric")
+    snap(collusive_price_numeric(model, params),
+         tryCatch(collusive_price(model, params), error = function(e) NA))
+    else collusive_price(model, params)
 
-  if (todo(b$ne))        b$ne        <- ne_fn(model, params)
+  if (todo(b$ne))        b$ne        <- ne_val()
   if (todo(b$monopoly))  b$monopoly  <- monopoly_price(model, params)
-  if (todo(b$collusive)) b$collusive <- co_fn(model, params)
+  if (todo(b$collusive)) b$collusive <- co_val()
 
   game$benchmarks <- b
   game

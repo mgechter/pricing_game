@@ -1,0 +1,121 @@
+---
+title: "Pricing game debrief"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    fig-width: 9
+    fig-height: 5.5
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  db: "data/pricing_game.sqlite"   # live SQLite file …
+  session_id: null                 # … and which session (null = most recent scored)
+  bundle_dir: null                 # …OR an unzipped export bundle instead of the DB
+  figs_dir: "figs"                 # PNGs are also written here for slide decks
+  anon: false                      # label firms "Firm A/B" instead of names
+---
+
+```{r setup}
+#| include: false
+library(ggplot2)
+# Run this from the project root (it reuses the app's own plotting code, so the
+# report and the on-platform Debrief tab can't disagree).
+source("R/load_engine.R"); source_engine()
+source("R/db.R")
+source("R/session_logic.R")
+source("R/debrief_data.R")
+source("R/debrief_plots.R")
+
+if (!is.null(params$bundle_dir)) {
+  d <- dbf_load_bundle(params$bundle_dir, params$session_id)
+} else {
+  con <- db_connect(params$db)
+  sid <- params$session_id
+  if (is.null(sid)) {
+    s <- sl_list_sessions(con); s <- s[s$n_result_rows > 0, ]
+    stopifnot("no scored sessions in the database" = nrow(s) > 0)
+    sid <- s$session_id[1]
+  }
+  d <- dbf_load(con, sid)
+}
+
+dir.create(params$figs_dir, showWarnings = FALSE, recursive = TRUE)
+save_fig <- function(name, plot, w = 9, h = 5.5) {
+  dev <- if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png else grDevices::png
+  ggsave(file.path(params$figs_dir, paste0(name, ".png")), plot,
+         device = dev, width = w, height = h, dpi = 200)
+  plot
+}
+lb <- dbf_leaderboards(d)
+fr <- dbf_flags(d)
+```
+
+# `r d$game$label`
+
+```{r game-params}
+b <- d$benchmarks; p <- d$params
+knitr::kable(data.frame(
+  Parameter = c("Model", "Rounds", "NE price", "Collusive price", "Monopoly (textbook)"),
+  Value = c(d$model, d$session$n_rounds,
+            paste0("$", round(b$ne)), paste0("$", round(b$collusive)),
+            paste0("$", round(b$monopoly)))))
+```
+
+# Price paths
+
+```{r price-paths}
+save_fig("price_paths", plot_price_paths(d, anon = params$anon))
+```
+
+# Average price per round
+
+```{r avg-price}
+save_fig("average_price", plot_avg_price(d), h = 4.5)
+```
+
+# Cumulative profit
+
+```{r cum-profit}
+save_fig("cumulative_profit", plot_profit_paths(d, anon = params$anon))
+```
+
+# Leaderboards
+
+```{r leaderboards}
+knitr::kable(transform(lb$individuals,
+  total_profit = round(total_profit), vs_ne = round(vs_ne)),
+  caption = "Players — profit, and profit vs. both firms playing NE every round")
+knitr::kable(transform(lb$markets, market_profit = round(market_profit)),
+  caption = "Markets — combined profit")
+```
+
+# Teachable moments
+
+```{r flags-table}
+if (nrow(fr)) knitr::kable(fr[c("kind", "market_id", "round", "detail")]) else
+  cat("Nothing flagged for this session.\n")
+```
+
+```{r flags-figs}
+#| results: asis
+#| fig-height: 4.5
+panels <- fr[fr$firm_label %in% c("Firm A", "Firm B"), , drop = FALSE]
+for (i in seq_len(nrow(panels))) {
+  cat("\n\n## ", panels$kind[i], " — Market ", panels$market_id[i],
+      ", round ", panels$round[i], "\n\n", sep = "")
+  pl <- plot_best_response(d, panels$market_id[i], panels$round[i], panels$firm_label[i])
+  print(save_fig(sprintf("best_response_m%s_r%s", panels$market_id[i], panels$round[i]),
+                 pl, h = 4.5))
+}
+```
+
+# What did we learn?
+
+*Notes for class — fill in from the charts above.*
+
+-
+-
+-

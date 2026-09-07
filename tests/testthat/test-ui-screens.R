@@ -24,7 +24,9 @@ test_that("every admin and player screen renders across the game lifecycle", {
 
   renders(ad_nav(ns, "run"))
   renders(ad_nav(ns, "history"))
+  renders(ad_nav(ns, "debrief"))
   renders(ad_history(ns, sl_list_sessions(con)))
+  renders(ad_debrief(ns, NULL, sl_list_sessions(con)[0, ], NULL, NULL))
 
   st <- sl_load_state(con, sid)
   renders(ad_lobby(ns, st, "http://host/"))
@@ -64,6 +66,11 @@ test_that("every admin and player screen renders across the game lifecycle", {
   renders(ad_finished(ns, st))
   renders(pl_finished(st$players[st$players$player_id == paired[1], ], st))
   expect_equal(nrow(sl_export_frame(con, sid)), 4 * nr)   # 4 players x nr rounds
+
+  # debrief screen against the finished session
+  d  <- dbf_load(con, sid)
+  ss <- sl_list_sessions(con); ss <- ss[ss$n_result_rows > 0, ]
+  renders(ad_debrief(ns, d, ss, sid, dbf_flags(d)))
 })
 
 test_that("player bench screen renders for a sitting-out player", {
