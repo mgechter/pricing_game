@@ -38,9 +38,11 @@ sl_export_bundle <- function(con, session_ids) {
       list(sid)), row.names = NULL)
 
     pairs[[length(pairs) + 1]] <- cbind(tag, db_query(con,
-      "SELECT market_id, firm_label, display_name, joined_at
-       FROM players WHERE session_id = ? AND market_id IS NOT NULL
-       ORDER BY market_id, firm_label", list(sid)), row.names = NULL)
+      "SELECT p.market_id, p.firm_label, p.display_name, h.display_name AS shadow_of,
+              p.joined_at
+       FROM players p LEFT JOIN players h ON h.player_id = p.shadow_of
+       WHERE p.session_id = ? AND p.market_id IS NOT NULL
+       ORDER BY p.market_id, p.firm_label", list(sid)), row.names = NULL)
 
     benchmarks[[length(benchmarks) + 1]] <- cbind(tag, data.frame(
       model      = g$demand$model,

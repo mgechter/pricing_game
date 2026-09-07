@@ -20,7 +20,7 @@ on.exit(DBI::dbDisconnect(con))
 GAMES <- c("bertrand", "hotelling_high", "hotelling_low")
 ROSTERS <- list(
   "Section A (MW 10am)" = c("Ada", "Boaz", "Cleo", "Dmitri", "Esme", "Farid", "Gwen", "Hugo"),
-  "Section B (TR 2pm)"  = c("Ines", "Jae", "Kira", "Liam", "Mira", "Noor", "Omar", "Priya")
+  "Section B (TR 2pm)"  = c("Ines", "Jae", "Kira", "Liam", "Mira", "Noor", "Omar")   # odd -> a shadow
 )
 RATIONALES <- c(
   "Undercutting to steal share", "Trying to hold the line at a high price",
@@ -85,13 +85,17 @@ play_session <- function(class_label, game_id, roster) {
     sim_prices(g$demand$model, g$demand$params, g$benchmarks, nr,
                arch[match(mk, markets)]))
   names(book) <- as.character(markets)
+  # a shadow gets its own (best-response-ish) price column in its host's market
+  for (mk in unique(pl$market_id[!is.na(pl$shadow_of)]))
+    book[[as.character(mk)]] <- cbind(book[[as.character(mk)]],
+      sim_prices(g$demand$model, g$demand$params, g$benchmarks, nr, "best_response")[, 1])
 
   for (r in seq_len(nr)) {
     for (mk in markets) {
       firms <- pl[pl$market_id == mk, ]
-      firms <- firms[order(firms$firm_label), ]            # Firm A, Firm B
+      firms <- firms[order(firms$firm_label), ]            # Firm A, Firm B, [Shadow]
       pm <- book[[as.character(mk)]]
-      for (i in 1:2) {
+      for (i in seq_len(nrow(firms))) {
         if (runif(1) < 0.02) next                          # ~2% forget a round
         sl_submit(con, sid, firms$player_id[i], r, pm[r, i],
                   rationale = sample(RATIONALES, 1))

@@ -60,18 +60,33 @@ test_that("a full 4-player Bertrand game runs lobby -> finished", {
   }
 })
 
-test_that("odd headcount leaves one player sitting out", {
+test_that("odd headcount -> shadow: everyone plays, host is not scored twice", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
-  join(con, sid, c("a", "b", "c", "d", "e"))
+  ids <- join(con, sid, c("a", "b", "c", "d", "e"))
   info <- sl_start_game(con, sid, seed = 1)
-  expect_length(info$sitting_out, 1)
-  pl <- sl_players(con, sid)
-  expect_equal(sum(is.na(pl$market_id)), 1)
-  expect_equal(sum(!is.na(pl$market_id)), 4)
 
-  out_id <- pl$player_id[is.na(pl$market_id)]
-  expect_error(sl_submit(con, sid, out_id, 1, 10), "not in a market")
+  expect_false(is.null(info$shadow))
+  pl <- sl_players(con, sid)
+  expect_equal(sum(is.na(pl$market_id)), 0)          # nobody benched
+  sh <- pl[!is.na(pl$shadow_of), ]
+  host <- pl[pl$player_id == sh$shadow_of, ]
+  expect_equal(nrow(sh), 1)
+  expect_equal(sh$firm_label, "Shadow")
+  expect_equal(sh$market_id, host$market_id)         # sits in the host's market
+
+  # play a round: shadow submits, gets a result 1-on-1 vs the host
+  for (pid in ids) sl_submit(con, sid, pid, 1, 20 + pid)
+  sc <- sl_score_round(con, sid)
+  res <- sl_load_state(con, sid)$results
+  expect_equal(nrow(res[res$round == 1, ]), 5)       # 4 real firms + 1 shadow
+  shadow_row <- res[res$player_id == sh$player_id & res$round == 1, ]
+  host_row   <- res[res$player_id == host$player_id & res$round == 1, ]
+  expect_equal(nrow(shadow_row), 1)
+  expect_equal(nrow(host_row), 1)                    # exactly one host result row
+  # the shadow's rival price is the host's price
+  expect_equal(shadow_row$rival_price, sl_load_state(con, sid)$submissions$price[
+    sl_load_state(con, sid)$submissions$player_id == host$player_id])
 })
 
 test_that("a no-show is scored out of the market; the diligent rival is not punished", {
@@ -141,6 +156,61 @@ test_that("history: list, label, delete, and switch the active session", {
   sl_set_active(con, s1)
   expect_equal(sl_active_session(con)$session_id, s1)
   expect_error(sl_set_active(con, 999), "no such session")
+})
+
+test_that("shadow faces the host's effective price, incl. when the host no-shows", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)   # NE 0, choke 100
+  ids <- join(con, sid, c("a", "b", "c"))
+  info <- sl_start_game(con, sid, seed = 1)
+  pl   <- sl_players(con, sid)
+  sh   <- pl[!is.na(pl$shadow_of), ]
+  host <- pl[pl$player_id == sh$shadow_of, ]
+  rival_of_host <- pl[pl$market_id == host$market_id & is.na(pl$shadow_of) &
+                        pl$player_id != host$player_id, ]
+
+  # round 1: shadow prices 20; host does NOT submit -> host scored out of market,
+  # so the shadow faces an absent rival and gets the sole-seller outcome.
+  sl_submit(con, sid, sh$player_id, 1, 20)
+  sl_submit(con, sid, rival_of_host$player_id, 1, 55)
+  sl_score_round(con, sid)
+  r <- sl_load_state(con, sid)$results
+  sr <- r[r$player_id == sh$player_id, ]
+  expect_equal(sr$profit, 20 * (100 - 20))        # sole seller at its own price
+  expect_true(is.na(sr$rival_price))
+})
+
+test_that("round timer: set, count down, and flag auto-advance", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  join(con, sid, c("a", "b"))
+  expect_true(is.na(sl_time_left(sl_session(con, sid))))    # lobby
+
+  sl_set_timer(con, sid, 60, auto_advance = TRUE)
+  sl_start_game(con, sid, seed = 1)
+  s <- sl_session(con, sid)
+  expect_equal(s$round_seconds, 60)
+  tl <- sl_time_left(s)
+  expect_true(tl > 55 && tl <= 60)
+  expect_false(sl_should_auto_advance(s))                   # time still left
+
+  # pretend the round started 61 s ago
+  db_run(con, "UPDATE sessions SET round_started_at = ? WHERE session_id = ?",
+         list(as.numeric(Sys.time()) - 61, sid))
+  s <- sl_session(con, sid)
+  expect_lte(sl_time_left(s), 0)
+  expect_true(sl_should_auto_advance(s))
+
+  sl_set_timer(con, sid, 0)                                 # timer off
+  expect_true(is.na(sl_time_left(sl_session(con, sid))))
+})
+
+test_that("anonymous flag round-trips", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  expect_equal(sl_session(con, sid)$anonymous, 0)
+  sl_set_anonymous(con, sid, TRUE)
+  expect_equal(sl_session(con, sid)$anonymous, 1)
 })
 
 test_that("guard rails: phase and lobby restrictions", {

@@ -21,7 +21,7 @@ dbf_load <- function(con, session_id) {
 
   results <- db_query(con,
     "SELECT r.round, r.market_id, r.player_id, p.display_name, p.firm_label,
-            r.price, r.rival_price, r.share, r.quantity, r.revenue,
+            p.shadow_of, r.price, r.rival_price, r.share, r.quantity, r.revenue,
             r.profit, r.cumulative_profit, r.no_submission
      FROM results r JOIN players p ON p.player_id = r.player_id
      WHERE r.session_id = ? ORDER BY r.market_id, r.player_id, r.round",

@@ -27,6 +27,19 @@ test_that("sl_export_bundle produces the four tidy tables", {
   expect_equal(b$benchmarks$monopoly, 50)
 })
 
+test_that("the pairs table names each shadow's host", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  ids <- join(con, sid, c("A", "B", "C"))
+  sl_start_game(con, sid, seed = 1)
+  play_out(con, sid, 20)
+  pr <- sl_export_bundle(con, sid)$pairs
+  expect_true("shadow_of" %in% names(pr))
+  sh <- pr[pr$firm_label == "Shadow", ]
+  expect_equal(nrow(sh), 1)
+  expect_true(!is.na(sh$shadow_of) && nzchar(sh$shadow_of))   # host's display name
+})
+
 test_that("a multi-session bundle stacks and tags each session", {
   con <- fresh_db()
   s1 <- make_scored(con, "bertrand", label = "g1")

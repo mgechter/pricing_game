@@ -78,6 +78,15 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
     screen_key()                      # the only reactive dependency (see above)
     shiny::isolate(pl_screen(ns, state(), me(), my_submission(), my_result()))
   })
+
+  # Independent of screen_key so the countdown never rebuilds the price input.
+  output$timer <- shiny::renderText({
+    shiny::invalidateLater(1000)
+    st <- state(); if (is.null(st)) return("")
+    tl <- sl_time_left(st$session)
+    if (is.na(tl)) "" else if (tl <= 0) "Time's up — the instructor will close the round."
+    else sprintf("%d:%02d left", tl %/% 60, floor(tl) %% 60)
+  })
 })
 
 pl_screen <- function(ns, st, p, sub, res) {
@@ -136,12 +145,17 @@ pl_lobby <- function(p, st) shiny::div(class = "card",
 pl_round <- function(ns, p, st, sub) {
   submitted <- !is.null(sub)
   last <- if (submitted) sub$price[1] else NA_real_
+  is_shadow <- identical(p$firm_label, "Shadow")
+  who <- if (is_shadow)
+    "You're a shadow this game — you're scored one-on-one against one of the firms in your market."
+    else sprintf("You are %s. Your rival is the other firm in your market.", p$firm_label)
   shiny::div(class = "card",
     shiny::div(class = "card-header",
       sprintf("Round %d of %d", st$session$current_round, st$session$n_rounds)),
     shiny::div(class = "card-body",
-      shiny::p(shiny::strong(sprintf("You are %s.", p$firm_label)),
-               " Your rival is the other firm in your market."),
+      shiny::p(shiny::strong(who)),
+      shiny::div(class = "pg-muted", style = "margin-bottom:.5rem;",
+                 shiny::textOutput(ns("timer"), inline = TRUE)),
       shiny::numericInput(ns("price"), "Your price ($)",
         value = if (is.na(last)) NULL else last, min = 0, step = 1),
       shiny::textAreaInput(ns("rationale"), "Why this price? (optional)",

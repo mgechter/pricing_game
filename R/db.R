@@ -10,22 +10,27 @@ CREATE TABLE IF NOT EXISTS meta (
   value TEXT
 );
 CREATE TABLE IF NOT EXISTS sessions (
-  session_id    INTEGER PRIMARY KEY AUTOINCREMENT,
-  game_id       TEXT    NOT NULL,
-  label         TEXT,
-  phase         TEXT    NOT NULL DEFAULT 'lobby',   -- lobby | open | scored | finished
-  current_round INTEGER NOT NULL DEFAULT 0,
-  n_rounds      INTEGER NOT NULL,
-  config_json   TEXT    NOT NULL,
-  created_at    REAL    NOT NULL
+  session_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id          TEXT    NOT NULL,
+  label            TEXT,
+  phase            TEXT    NOT NULL DEFAULT 'lobby',   -- lobby | open | scored | finished
+  current_round    INTEGER NOT NULL DEFAULT 0,
+  n_rounds         INTEGER NOT NULL,
+  config_json      TEXT    NOT NULL,
+  round_started_at REAL,                              -- epoch when the current round opened
+  round_seconds    INTEGER NOT NULL DEFAULT 0,        -- countdown length; 0 = no timer
+  auto_advance     INTEGER NOT NULL DEFAULT 0,        -- close+score+advance when the timer expires
+  anonymous        INTEGER NOT NULL DEFAULT 0,        -- hide names on projector / debrief
+  created_at       REAL    NOT NULL
 );
 CREATE TABLE IF NOT EXISTS players (
   player_id    INTEGER PRIMARY KEY AUTOINCREMENT,
   session_id   INTEGER NOT NULL,
   display_name TEXT    NOT NULL,
   token        TEXT    NOT NULL UNIQUE,
-  market_id    INTEGER,                             -- NULL = unpaired / sitting out
-  firm_label   TEXT,                                -- 'Firm A' | 'Firm B'
+  market_id    INTEGER,                             -- NULL = unpaired
+  firm_label   TEXT,                                -- 'Firm A' | 'Firm B' | 'Shadow'
+  shadow_of    INTEGER,                             -- host player_id if this is a shadow
   joined_at    REAL    NOT NULL
 );
 CREATE TABLE IF NOT EXISTS submissions (
@@ -59,7 +64,12 @@ CREATE TABLE IF NOT EXISTS results (
 # Columns added after the first release — applied to pre-existing DBs.
 DB_MIGRATIONS <- c(
   "ALTER TABLE results  ADD COLUMN no_submission INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE sessions ADD COLUMN label TEXT"
+  "ALTER TABLE sessions ADD COLUMN label TEXT",
+  "ALTER TABLE players  ADD COLUMN shadow_of INTEGER",
+  "ALTER TABLE sessions ADD COLUMN round_started_at REAL",
+  "ALTER TABLE sessions ADD COLUMN round_seconds INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sessions ADD COLUMN auto_advance INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sessions ADD COLUMN anonymous INTEGER NOT NULL DEFAULT 0"
 )
 
 db_connect <- function(path) {

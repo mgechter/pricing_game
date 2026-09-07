@@ -73,15 +73,14 @@ test_that("every admin and player screen renders across the game lifecycle", {
   renders(ad_debrief(ns, d, ss, sid, dbf_flags(d)))
 })
 
-test_that("player bench screen renders for a sitting-out player", {
+test_that("odd headcount: the shadow player still gets a round view", {
   con <- fresh_db()
   ns  <- NS("t")
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
   join(con, sid, c("a", "b", "c"))
   sl_start_game(con, sid, seed = 2)
   st <- sl_load_state(con, sid)
-  bench <- st$players[is.na(st$players$market_id), ][1, ]
-  # the module picks the bench card itself; just confirm the generic card renders
-  renders(pl_card("You're sitting this one out", "…"))
-  expect_true(is.na(bench$market_id))
+  sh <- st$players[!is.na(st$players$shadow_of), ][1, ]
+  expect_false(is.na(sh$market_id))                  # in a market, not benched
+  renders(pl_round(ns, sh, st, NULL))
 })

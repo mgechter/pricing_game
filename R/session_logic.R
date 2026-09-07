@@ -77,10 +77,12 @@ sl_delete_session <- function(con, session_id) {
 sl_reset_to_lobby <- function(con, session_id) {
   db_run(con, "DELETE FROM submissions WHERE session_id = ?", list(session_id))
   db_run(con, "DELETE FROM results     WHERE session_id = ?", list(session_id))
-  db_run(con, "UPDATE players SET market_id = NULL, firm_label = NULL WHERE session_id = ?",
-         list(session_id))
-  db_run(con, "UPDATE sessions SET phase = 'lobby', current_round = 0 WHERE session_id = ?",
-         list(session_id))
+  db_run(con,
+    "UPDATE players SET market_id = NULL, firm_label = NULL, shadow_of = NULL
+     WHERE session_id = ?", list(session_id))
+  db_run(con,
+    "UPDATE sessions SET phase = 'lobby', current_round = 0, round_started_at = NULL
+     WHERE session_id = ?", list(session_id))
   invisible(TRUE)
 }
 
@@ -131,13 +133,41 @@ sl_start_game <- function(con, session_id, seed = NULL) {
 
   pr <- make_pairs(pl$player_id, seed = seed)
   for (i in seq_len(nrow(pr$pairs))) {
+    row <- pr$pairs[i, ]
     db_run(con,
-      "UPDATE players SET market_id = ?, firm_label = ? WHERE player_id = ?",
-      list(pr$pairs$market_id[i], pr$pairs$firm_label[i], pr$pairs$player_id[i]))
+      "UPDATE players SET market_id = ?, firm_label = ?, shadow_of = ? WHERE player_id = ?",
+      list(row$market_id, row$firm_label,
+           if (is.na(row$shadow_of)) NA else as.integer(row$shadow_of), row$player_id))
   }
-  db_run(con, "UPDATE sessions SET phase = 'open', current_round = 1 WHERE session_id = ?",
-         list(session_id))
-  invisible(list(n_markets = nrow(pr$pairs) / 2, sitting_out = pr$sitting_out))
+  db_run(con,
+    "UPDATE sessions SET phase = 'open', current_round = 1, round_started_at = ?
+     WHERE session_id = ?",
+    list(now_epoch(), session_id))
+  invisible(list(n_markets = sum(is.na(pr$pairs$shadow_of)) / 2, shadow = pr$shadow))
+}
+
+# --- timer / display settings ------------------------------------------------
+
+sl_set_timer <- function(con, session_id, seconds, auto_advance = NULL) {
+  seconds <- max(0L, as.integer(seconds %||% 0L))
+  db_run(con, "UPDATE sessions SET round_seconds = ? WHERE session_id = ?",
+         list(seconds, session_id))
+  if (!is.null(auto_advance))
+    db_run(con, "UPDATE sessions SET auto_advance = ? WHERE session_id = ?",
+           list(as.integer(isTRUE(auto_advance)), session_id))
+  invisible(TRUE)
+}
+
+sl_set_anonymous <- function(con, session_id, anonymous) {
+  db_run(con, "UPDATE sessions SET anonymous = ? WHERE session_id = ?",
+         list(as.integer(isTRUE(anonymous)), session_id))
+  invisible(TRUE)
+}
+
+# seconds left in the current round, or NA if no timer / not open
+sl_time_left <- function(s) {
+  if (is.null(s) || s$phase != "open" || (s$round_seconds %||% 0) <= 0) return(NA_real_)
+  s$round_seconds - (now_epoch() - (s$round_started_at %||% now_epoch()))
 }
 
 # --- submissions --------------------------------------------------------------
@@ -194,85 +224,108 @@ sl_round_status <- function(con, session_id) {
   if (!is.null(v)) v$price else NULL
 }
 
-# A missing price is treated as "priced yourself out of the market": the firm gets
-# no sales and $0, while its rival gets the residual-monopoly outcome at its own
-# price. This means a diligent player is never punished for a rival's no-show.
-# `carry_forward = TRUE` instead reuses that player's previous-round price.
+# The price a player is scored at this round: their submission, or (with
+# carry_forward) their previous price, or a finite "out of the market" price when
+# there is nothing. Writes the carried-forward submission row as a side effect.
+.effective_price <- function(con, session_id, player_id, round, carry_forward, out_price) {
+  sub <- db_one(con,
+    "SELECT price FROM submissions WHERE session_id = ? AND round = ? AND player_id = ?",
+    list(session_id, round, player_id))
+  if (!is.null(sub)) return(list(price = sub$price, missing = FALSE))
+  if (isTRUE(carry_forward)) {
+    pp <- .prev_price(con, session_id, player_id, round)
+    if (!is.null(pp)) {
+      db_run(con,
+        "INSERT INTO submissions (session_id, round, player_id, price, rationale, carried, submitted_at)
+         VALUES (?, ?, ?, ?, '(carried forward)', 1, ?)
+         ON CONFLICT(session_id, round, player_id) DO NOTHING",
+        list(session_id, round, player_id, pp, now_epoch()))
+      return(list(price = pp, missing = FALSE))
+    }
+  }
+  list(price = out_price, missing = TRUE)
+}
+
+.write_result <- function(con, session_id, round, player_id, market_id,
+                          own_price, rival_price, r, missing) {
+  prior <- db_one(con,
+    "SELECT COALESCE(SUM(profit), 0) AS s FROM results
+     WHERE session_id = ? AND player_id = ? AND round < ?",
+    list(session_id, player_id, round))$s
+  db_run(con,
+    "INSERT INTO results
+       (session_id, round, player_id, market_id, price, rival_price, share,
+        quantity, revenue, profit, cumulative_profit, no_submission, computed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(session_id, round, player_id) DO UPDATE SET
+       price=excluded.price, rival_price=excluded.rival_price, share=excluded.share,
+       quantity=excluded.quantity, revenue=excluded.revenue, profit=excluded.profit,
+       cumulative_profit=excluded.cumulative_profit,
+       no_submission=excluded.no_submission, computed_at=excluded.computed_at",
+    list(session_id, round, player_id, market_id, own_price, rival_price,
+         r$share, r$quantity, r$revenue, r$profit, prior + r$profit,
+         as.integer(missing), now_epoch()))
+}
+
+# Score the current round. A missing price is treated as "priced yourself out of
+# the market" ($0; the rival gets the sole-seller outcome) unless carry_forward
+# reuses the player's previous price. Shadow players are scored 1-on-1 against
+# their host's effective price for the round; the host is not scored twice.
 sl_score_round <- function(con, session_id, carry_forward = FALSE) {
   s <- sl_session(con, session_id)
   if (is.null(s)) stop("no such session", call. = FALSE)
-  # allowed while the round is open or already scored, so the admin can re-score
   if (!s$phase %in% c("open", "scored")) stop("round is not open", call. = FALSE)
   game   <- sl_game(s)
   model  <- game$demand$model
   params <- game$demand$params
   rnd    <- s$current_round
-  out_price <- (params$V %||% params$choke %||% 100) * 1e6   # finite "out of market"
+  out_price <- (params$V %||% params$choke %||% 100) * 1e6
 
   pl <- db_query(con,
-    "SELECT player_id, display_name, market_id, firm_label FROM players
+    "SELECT player_id, display_name, market_id, firm_label, shadow_of FROM players
      WHERE session_id = ? AND market_id IS NOT NULL ORDER BY market_id, firm_label",
     list(session_id))
+  real    <- pl[is.na(pl$shadow_of), , drop = FALSE]
+  shadows <- pl[!is.na(pl$shadow_of), , drop = FALSE]
 
   scored <- 0L; skipped <- character(0); no_shows <- character(0)
 
-  for (mk in sort(unique(pl$market_id))) {
-    firms <- pl[pl$market_id == mk, , drop = FALSE]
+  for (mk in sort(unique(real$market_id))) {
+    firms <- real[real$market_id == mk, , drop = FALSE]
     if (nrow(firms) != 2) { skipped <- c(skipped, sprintf("market %s", mk)); next }
-
-    prices  <- rep(NA_real_, 2)
-    missing <- rep(FALSE, 2)
-    for (j in 1:2) {
-      sub <- db_one(con,
-        "SELECT price FROM submissions WHERE session_id = ? AND round = ? AND player_id = ?",
-        list(session_id, rnd, firms$player_id[j]))
-      if (!is.null(sub)) {
-        prices[j] <- sub$price
-        next
-      }
-      pp <- if (isTRUE(carry_forward)) .prev_price(con, session_id, firms$player_id[j], rnd) else NULL
-      if (!is.null(pp)) {
-        prices[j] <- pp
-        db_run(con,
-          "INSERT INTO submissions (session_id, round, player_id, price, rationale, carried, submitted_at)
-           VALUES (?, ?, ?, ?, '(carried forward)', 1, ?)
-           ON CONFLICT(session_id, round, player_id) DO NOTHING",
-          list(session_id, rnd, firms$player_id[j], pp, now_epoch()))
-      } else {
-        # No submission and nothing to carry: score them out of the market. No
-        # submissions row is written, so a later carry_forward re-score can still
-        # fill the gap; the results row carries the no_submission flag.
-        prices[j]  <- out_price
-        missing[j] <- TRUE
-        no_shows   <- c(no_shows, firms$display_name[j])
-      }
-    }
+    ep <- lapply(1:2, function(j)
+      .effective_price(con, session_id, firms$player_id[j], rnd, carry_forward, out_price))
+    prices  <- vapply(ep, `[[`, numeric(1), "price")
+    missing <- vapply(ep, `[[`, logical(1), "missing")
+    for (j in 1:2) if (missing[j]) no_shows <- c(no_shows, firms$display_name[j])
 
     res <- resolve_round(model, params,
              data.frame(firm = firms$firm_label, price = prices, stringsAsFactors = FALSE))
+    for (j in 1:2)
+      .write_result(con, session_id, rnd, firms$player_id[j], mk,
+        if (missing[j]) NA_real_ else res$price[j],
+        if (missing[3 - j]) NA_real_ else res$rival_price[j],
+        res[j, ], missing[j])
+    scored <- scored + 1L
+  }
 
-    for (j in 1:2) {
-      prior <- db_one(con,
-        "SELECT COALESCE(SUM(profit), 0) AS s FROM results
-         WHERE session_id = ? AND player_id = ? AND round < ?",
-        list(session_id, firms$player_id[j], rnd))$s
-      own_price   <- if (missing[j]) NA_real_ else res$price[j]
-      rival_price <- if (missing[3 - j]) NA_real_ else res$rival_price[j]
-      db_run(con,
-        "INSERT INTO results
-           (session_id, round, player_id, market_id, price, rival_price, share,
-            quantity, revenue, profit, cumulative_profit, no_submission, computed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(session_id, round, player_id) DO UPDATE SET
-           price=excluded.price, rival_price=excluded.rival_price, share=excluded.share,
-           quantity=excluded.quantity, revenue=excluded.revenue, profit=excluded.profit,
-           cumulative_profit=excluded.cumulative_profit,
-           no_submission=excluded.no_submission, computed_at=excluded.computed_at",
-        list(session_id, rnd, firms$player_id[j], mk,
-             own_price, rival_price, res$share[j], res$quantity[j],
-             res$revenue[j], res$profit[j], prior + res$profit[j],
-             as.integer(missing[j]), now_epoch()))
-    }
+  for (i in seq_len(nrow(shadows))) {
+    sh <- shadows[i, ]
+    host <- db_one(con,
+      "SELECT price FROM results WHERE session_id = ? AND player_id = ? AND round = ?",
+      list(session_id, sh$shadow_of, rnd))
+    host_out   <- is.null(host) || is.na(host$price)
+    host_price <- if (host_out) out_price else host$price
+    ep <- .effective_price(con, session_id, sh$player_id, rnd, carry_forward, out_price)
+    if (ep$missing) no_shows <- c(no_shows, sh$display_name)
+
+    res <- resolve_round(model, params,
+             data.frame(firm = c("Shadow", "Host"), price = c(ep$price, host_price),
+                        stringsAsFactors = FALSE))
+    .write_result(con, session_id, rnd, sh$player_id, sh$market_id,
+      if (ep$missing) NA_real_ else ep$price,
+      if (host_out) NA_real_ else host_price,
+      res[1, ], ep$missing)
     scored <- scored + 1L
   }
 
@@ -289,8 +342,9 @@ sl_advance_round <- function(con, session_id) {
     return(invisible("finished"))
   }
   db_run(con,
-    "UPDATE sessions SET phase = 'open', current_round = current_round + 1 WHERE session_id = ?",
-    list(session_id))
+    "UPDATE sessions SET phase = 'open', current_round = current_round + 1,
+            round_started_at = ? WHERE session_id = ?",
+    list(now_epoch(), session_id))
   invisible("open")
 }
 
@@ -310,7 +364,15 @@ sl_state_stamp <- function(con, session_id) {
     "SELECT COUNT(*) n, COALESCE(MAX(computed_at), 0) t
        FROM results WHERE session_id = ?", list(session_id))
   paste(s$phase, s$current_round, n_pl,
-        sub$n, sprintf("%.3f", sub$t), res$n, sprintf("%.3f", res$t), sep = "|")
+        sub$n, sprintf("%.3f", sub$t), res$n, sprintf("%.3f", res$t),
+        s$round_seconds %||% 0, s$auto_advance %||% 0, s$anonymous %||% 0,
+        sep = "|")
+}
+
+# Timer expired and auto-advance is on? (checked by the admin app while connected)
+sl_should_auto_advance <- function(s) {
+  isTRUE((s$auto_advance %||% 0) == 1) && s$phase == "open" &&
+    !is.na(tl <- sl_time_left(s)) && tl <= 0
 }
 
 sl_load_state <- function(con, session_id) {

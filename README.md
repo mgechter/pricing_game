@@ -47,6 +47,7 @@ Rscript scripts/run_app.R                       # serves on :3838
 |---|---|
 | **Student** | `http://<host>:3838/` |
 | **Instructor** | `http://<host>:3838/?role=admin&key=admin` |
+| **Projector** | `http://<host>:3838/?mode=display` — read-only big screen for the room |
 
 Expose it to the class for the session:
 
@@ -68,15 +69,25 @@ ignored). If it ever gets orphaned: `kill $(lsof -ti tcp:3838)`.
 2. Shares the student link. Each **student** enters a name → lands in the lobby.
    Their identity is kept in the URL (`?t=…`), so a refresh resumes them.
 3. Instructor clicks **Start game** — students are randomly paired into 2-firm
-   markets, fixed for the game. Odd headcount → the last student sits out.
+   markets, fixed for the game. Odd headcount → the last student joins a market as
+   a **shadow**: they submit prices and are scored one-on-one against a paired
+   student's real prices (that student isn't scored twice). Nobody sits out.
 4. Each round: students enter a price and an optional "why this price?"; they can
    change it until the round closes. The rival is shown only as "the other firm".
+   An optional **round timer** shows a countdown on every screen.
 5. Instructor watches the market grid fill (it updates live as students submit
    *and* as they edit), then **Close & score round → Next round**.
    - Missing a price → that student is scored **out of the market** ($0; the
      rival gets the sole-seller outcome). Tick **carry forward** first to reuse
      their previous-round price instead.
+   - Set a **timer** (seconds) on the create screen or the round screen; tick
+     **auto-score & advance** to have the round close itself when it expires
+     (needs the admin tab open).
+   - **Hide names** puts "Firm A / B" on the projector and debrief instead.
 6. After the last round: leaderboard, then the **Debrief** tab.
+
+Put `?mode=display` on the projector for a live big-screen view (round, timer,
+submission count, price paths, leaderboard).
 
 Other admin tabs:
 
@@ -224,8 +235,9 @@ R/
   export.R            sl_export_bundle + ZIP / xlsx writers
   debrief_data.R      dbf_*  — tidy frames + teachable-moment flags
   debrief_plots.R     ggplot builders (shared by the app and debrief.qmd)
-  mod_player.R         student view
+  mod_player.R         student view (join, submit, result card)
   mod_admin.R          instructor view: Run / History / Debrief
+  mod_display.R        projector view (?mode=display)
 debrief.qmd           parametrised report; also writes figs/
 scripts/
   run_app.R  run_tests.R  render_figs.R

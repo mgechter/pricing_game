@@ -1,7 +1,8 @@
-# Pricing game — Shiny app (Phase 1 MVP).
+# Pricing game — Shiny app.
 #
-#   Player view:  <url>/
-#   Admin view:   <url>/?role=admin&key=<PRICING_ADMIN_KEY>
+#   Player view:      <url>/
+#   Admin view:       <url>/?role=admin&key=<PRICING_ADMIN_KEY>
+#   Projector view:   <url>/?mode=display
 #
 # Env vars (all optional):
 #   PRICING_DB         sqlite file path        (default data/pricing_game.sqlite)
@@ -21,6 +22,7 @@ source("R/debrief_plots.R")
 source("R/ui_helpers.R")
 source("R/mod_player.R")
 source("R/mod_admin.R")
+source("R/mod_display.R")
 
 DB_PATH    <- Sys.getenv("PRICING_DB",        "data/pricing_game.sqlite")
 ADMIN_KEY  <- Sys.getenv("PRICING_ADMIN_KEY", "admin")
@@ -44,22 +46,26 @@ ui <- page_fluid(
 )
 
 server <- function(input, output, session) {
-  q        <- parseQueryString(isolate(session$clientData$url_search))
-  is_admin <- identical(q$role, "admin")
-  ok_key   <- identical(q$key, ADMIN_KEY)
+  q    <- parseQueryString(isolate(session$clientData$url_search))
+  mode <- if (identical(q$mode, "display")) "display"
+          else if (identical(q$role, "admin")) "admin"
+          else "player"
+  ok_key <- identical(q$key, ADMIN_KEY)
 
   output$root <- renderUI({
-    if (is_admin && !ok_key)
-      div(class = "pg-narrow", class = "card",
-          div(class = "card-body",
-              h4("Admin key required"),
-              p(class = "pg-muted", "Append ", tags$code("&key=…"), " to the URL.")))
-    else if (is_admin) admin_ui("admin")
-    else player_ui("player")
+    switch(mode,
+      display = display_ui("display"),
+      admin   = if (ok_key) admin_ui("admin")
+                else div(class = "pg-narrow", class = "card", div(class = "card-body",
+                  h4("Admin key required"),
+                  p(class = "pg-muted", "Append ", tags$code("&key=…"), " to the URL."))),
+      player  = player_ui("player"))
   })
 
-  if (is_admin && ok_key) admin_server("admin", .con, GAMES_PATH)
-  else if (!is_admin)     player_server("player", .con)
+  switch(mode,
+    display = display_server("display", .con),
+    admin   = if (ok_key) admin_server("admin", .con, GAMES_PATH),
+    player  = player_server("player", .con))
 }
 
 shinyApp(ui, server)

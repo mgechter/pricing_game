@@ -32,9 +32,17 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
   shiny::observeEvent(input$start, {
     st <- state(); shiny::req(st)
     guard({
+      if (!is.null(input$new_timer))
+        sl_set_timer(con, sid(), input$new_timer, auto_advance = isTRUE(input$new_auto))
+      if (!is.null(input$new_anon))
+        sl_set_anonymous(con, sid(), isTRUE(input$new_anon))
       info <- sl_start_game(con, sid())
-      if (length(info$sitting_out))
-        shiny::showNotification("Odd number of players — one is sitting out.", type = "warning")
+      if (!is.null(info$shadow)) {
+        who <- db_one(con, "SELECT display_name FROM players WHERE player_id = ?",
+                      list(info$shadow$player_id))$display_name
+        shiny::showNotification(sprintf("Odd number — %s is playing as a shadow (scored 1-on-1 against a paired student).", who),
+                                type = "message", duration = 6)
+      }
     })
   })
 
@@ -245,6 +253,30 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
       zip::zip(file, files = basename(files), root = dir)
     })
 
+  # ---- round timer -----------------------------------------------------------
+  output$round_timer <- shiny::renderText({
+    shiny::invalidateLater(1000)
+    st <- state(); if (is.null(st)) return("")
+    tl <- sl_time_left(st$session)
+    if (is.na(tl)) "" else if (tl <= 0) "⏱  Time's up."
+    else sprintf("⏱  %d:%02d left in the round", tl %/% 60, floor(tl) %% 60)
+  })
+  shiny::observeEvent(list(input$timer_now, input$auto_now), {
+    st <- state(); shiny::req(st, st$session$phase %in% c("open", "scored"))
+    guard(sl_set_timer(con, sid(), input$timer_now %||% 0, auto_advance = isTRUE(input$auto_now)))
+  }, ignoreInit = TRUE)
+
+  last_auto <- shiny::reactiveVal(-1L)
+  shiny::observe({
+    shiny::invalidateLater(2000)
+    st <- shiny::isolate(state()); if (is.null(st)) return()
+    if (sl_should_auto_advance(st$session) && last_auto() != st$session$current_round) {
+      last_auto(st$session$current_round)
+      guard({ sl_score_round(con, sid(), carry_forward = carry_rv()); sl_advance_round(con, sid()) })
+      shiny::showNotification("Timer expired — round scored and advanced.", type = "message")
+    }
+  })
+
   output$screen <- shiny::renderUI({
     hist_tick()
     st <- state()
@@ -283,9 +315,17 @@ ad_create <- function(ns, choices) shiny::div(class = "card",
   shiny::div(class = "card-body",
     shiny::selectInput(ns("game_id"), "Game", choices = choices),
     shiny::textInput(ns("new_label"), "Label (optional)", placeholder = "e.g. Section A — Bertrand"),
+    shiny::fluidRow(
+      shiny::column(4, shiny::numericInput(ns("new_timer"),
+        "Round timer (seconds, 0 = off)", value = 0, min = 0, step = 15)),
+      shiny::column(4, shiny::div(style = "margin-top:1.9rem;",
+        shiny::checkboxInput(ns("new_auto"), "Auto-score & advance when it expires", FALSE))),
+      shiny::column(4, shiny::div(style = "margin-top:1.9rem;",
+        shiny::checkboxInput(ns("new_anon"), "Hide names on projector / debrief", FALSE)))),
     shiny::actionButton(ns("create"), "Create session", class = "btn btn-primary"),
     shiny::p(class = "pg-muted", style = "margin-top:.75rem;",
-      "Sessions are saved automatically — see the History tab to revisit or export past ones.")))
+      "Sessions are saved automatically — see the History tab to revisit or export past ones. ",
+      "Projector view: add ", shiny::tags$code("?mode=display"), " to the URL.")))
 
 ad_history <- function(ns, sess) {
   if (nrow(sess) == 0)
@@ -388,7 +428,21 @@ ad_market_table <- function(st) {
 
 ad_round <- function(ns, st, phase, carry = FALSE) {
   s <- st$session; rs <- st$round_status
-  bench <- st$players$display_name[is.na(st$players$market_id)]
+  shad <- st$players[!is.na(st$players$shadow_of), , drop = FALSE]
+  shadow_note <- if (nrow(shad)) {
+    hosts <- st$players$display_name[match(shad$shadow_of, st$players$player_id)]
+    shiny::p(class = "pg-muted",
+      sprintf("Shadow: %s (scored 1-on-1 against %s)",
+              paste(shad$display_name, collapse = ", "), paste(hosts, collapse = ", ")))
+  }
+  timer_row <- shiny::fluidRow(
+    shiny::column(4, shiny::numericInput(ns("timer_now"), "Round timer (s)",
+      value = s$round_seconds %||% 0, min = 0, step = 15)),
+    shiny::column(4, shiny::div(style = "margin-top:1.9rem;",
+      shiny::checkboxInput(ns("auto_now"), "Auto-score & advance on expiry",
+                           value = isTRUE((s$auto_advance %||% 0) == 1)))),
+    shiny::column(4, shiny::div(style = "margin-top:2rem;font-weight:600;",
+      shiny::textOutput(ns("round_timer")))))
   controls <- if (phase == "open")
     shiny::tagList(
       shiny::checkboxInput(ns("carry"),
@@ -410,9 +464,9 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
         sprintf("Round %d of %d — %s", s$current_round, s$n_rounds, phase)),
       shiny::p(sprintf("%d of %d submitted.%s", rs$n_submitted, rs$n_expected,
         if (length(rs$missing)) paste0("  Waiting on: ", paste(rs$missing, collapse = ", ")) else "")),
+      timer_row,
       html_table(ad_market_table(st)),
-      if (length(bench)) shiny::p(class = "pg-muted",
-        paste("Sitting out:", paste(bench, collapse = ", "))),
+      shadow_note,
       shiny::hr(),
       controls,
       shiny::span(style = "margin-left:1rem;", shiny::downloadButton(ns("dl"), "Export CSV")),
@@ -454,7 +508,8 @@ ad_debrief <- function(ns, d, sessions, sid, fr) {
       shiny::column(6, shiny::selectInput(ns("debrief_pick"), "Session",
         choices = choices, selected = sid)),
       shiny::column(3, shiny::checkboxInput(ns("db_anon"),
-        "Show as Firm A / B", value = FALSE)),
+        "Show as Firm A / B",
+        value = !is.null(d) && isTRUE((d$session$anonymous %||% 0) == 1))),
       shiny::column(3, shiny::div(style = "margin-top:1.6rem;",
         shiny::actionButton(ns("debrief_refresh"), "Refresh", class = "btn btn-sm btn-outline-secondary"), " ",
         shiny::downloadButton(ns("dl_figpack"), "Figure pack (ZIP)", class = "btn btn-sm btn-outline-primary"))))))
