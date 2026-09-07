@@ -249,13 +249,19 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
 
   output$db_flags   <- shiny::renderTable(
     { fr <- flags(); if (is.null(fr) || !nrow(fr)) return(NULL)
-      data.frame(Flag = fr$kind, Market = fr$market_id, Round = fr$round, What = fr$detail) },
+      data.frame(Flag = fr$kind, Market = fr$market_id, Round = fr$round,
+                 What = fr$detail,
+                 `Why they said` = ifelse(nzchar(fr$rationale %||% ""),
+                                          paste0("“", fr$rationale, "”"), ""),
+                 check.names = FALSE) },
     striped = TRUE, width = "100%")
+  signed <- function(x) sprintf("%s%s", if (x >= 0) "+" else "-", money0(abs(x)))
   output$db_lb_indiv <- shiny::renderTable({
     d <- shiny::req(dbrief()); lb <- dbf_leaderboards(d)$individuals
     data.frame(Player = lb$display_name, Market = lb$market_id, Firm = lb$firm_label,
                `Total profit` = vapply(lb$total_profit, money0, ""),
-               `vs. all-NE`   = vapply(lb$vs_ne, function(x) sprintf("%s%s", if (x >= 0) "+" else "-", money0(abs(x))), ""),
+               `vs. all-NE`        = vapply(lb$vs_ne, signed, ""),
+               `vs. all-collude`   = vapply(lb$vs_collusive, signed, ""),
                check.names = FALSE)
   }, striped = TRUE, width = "100%")
   output$db_lb_mkt <- shiny::renderTable({

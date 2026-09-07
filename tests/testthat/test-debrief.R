@@ -33,6 +33,29 @@ test_that("dbf_flags catches tacit collusion and an off-best-response move", {
   fr <- dbf_flags(dbf_load(con, sid))
   expect_true("Tacit collusion" %in% fr$kind)
   expect_true("Off best response" %in% fr$kind)
+  expect_true("rationale" %in% names(fr))
+})
+
+test_that("dbf_flags carries each flagged firm's own rationale", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  ids <- join(con, sid, c("A", "B")); sl_start_game(con, sid, seed = 1)
+  repeat {
+    s <- sl_session(con, sid); if (s$phase == "finished") break
+    pl <- sl_players(con, sid); pl <- pl[!is.na(pl$market_id), ]
+    for (i in seq_len(nrow(pl))) {
+      why <- if (s$current_round == 2 && pl$firm_label[i] == "Firm A")
+        "panic move, wanted to grab the whole market" else "hold the line"
+      p <- if (s$current_round == 2 && pl$firm_label[i] == "Firm A") 95 else 25
+      sl_submit(con, sid, pl$player_id[i], s$current_round, p, rationale = why)
+    }
+    sl_score_round(con, sid); sl_advance_round(con, sid)
+  }
+  fr <- dbf_flags(dbf_load(con, sid))
+  br <- fr[fr$kind == "Off best response", ]
+  expect_true(nrow(br) >= 1)
+  expect_match(br$rationale[1], "panic move")
+  expect_equal(fr$rationale[fr$firm_label == "both"], rep("", sum(fr$firm_label == "both")))
 })
 
 test_that("dbf_leaderboards totals and vs-NE line up", {
@@ -52,6 +75,10 @@ test_that("dbf_leaderboards totals and vs-NE line up", {
   nr <- d$session$n_rounds
   expect_equal(lb$individuals$vs_ne,
                lb$individuals$total_profit - nr * lb$ne_profit_per_round)
+  expect_equal(lb$individuals$vs_collusive,
+               lb$individuals$total_profit - nr * lb$collusive_profit_per_round)
+  # colluding every round pays more than NE every round -> vs_collusive is worse
+  expect_true(all(lb$individuals$vs_collusive <= lb$individuals$vs_ne + 1e-6))
 })
 
 test_that("plot builders return ggplot objects; best-response guards bad input", {

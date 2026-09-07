@@ -71,7 +71,8 @@ dbf_load_bundle <- function(dir, session_id = NULL) {
 
 # --- teachable moments ---------------------------------------------------------
 
-.flags_cols <- c("kind", "market_id", "round", "firm_label", "who", "detail", "score")
+.flags_cols <- c("kind", "market_id", "round", "firm_label", "who", "detail",
+                 "rationale", "score")
 .flags_empty <- function() {
   d <- as.data.frame(matrix(nrow = 0, ncol = length(.flags_cols)))
   names(d) <- .flags_cols; d
@@ -148,7 +149,20 @@ dbf_flags <- function(d, top_n = 2L) {
   }
 
   res_df <- if (length(out)) do.call(rbind, out) else .flags_empty()
+  res_df$rationale <- .flag_rationale(res_df, d$submissions)
   res_df[order(-res_df$score), , drop = FALSE]
+}
+
+# The student's own "why this price?" note for a flagged (player, round), where
+# the flag names one firm; blank for the market-level flags ("both firms").
+.flag_rationale <- function(fr, subs) {
+  if (!nrow(fr)) return(character(0))
+  vapply(seq_len(nrow(fr)), function(i) {
+    if (!isTRUE(fr$firm_label[i] %in% c("Firm A", "Firm B")) ||
+        is.null(subs) || !nrow(subs)) return("")
+    hit <- subs[subs$display_name == fr$who[i] & subs$round == fr$round[i], ]
+    if (nrow(hit) && !is.na(hit$rationale[1])) trimws(hit$rationale[1]) else ""
+  }, character(1))
 }
 
 # --- leaderboards -----------------------------------------------------------
@@ -220,12 +234,15 @@ dbf_leaderboards <- function(d) {
   res <- d$results
   nr  <- d$session$n_rounds %||% max(res$round, 0)
   ne  <- d$benchmarks$ne %||% 0
-  ne_pr <- own_profit(d$model, d$params, ne, ne)          # symmetric per-round NE profit
+  coll <- d$benchmarks$collusive %||% d$benchmarks$monopoly %||% ne
+  ne_pr   <- own_profit(d$model, d$params, ne, ne)        # symmetric per-round NE profit
+  coll_pr <- own_profit(d$model, d$params, coll, coll)    # ...and if both had colluded
 
   indiv <- res |>
     group_by(market_id, firm_label, display_name) |>
     summarise(total_profit = sum(profit), .groups = "drop") |>
-    mutate(vs_ne = total_profit - nr * ne_pr) |>
+    mutate(vs_ne = total_profit - nr * ne_pr,
+           vs_collusive = total_profit - nr * coll_pr) |>
     arrange(desc(total_profit))
 
   markets <- res |>
@@ -238,5 +255,6 @@ dbf_leaderboards <- function(d) {
     arrange(desc(market_profit))
 
   list(individuals = as.data.frame(indiv), markets = as.data.frame(markets),
-       ne_profit_per_round = ne_pr, rounds = nr)
+       ne_profit_per_round = ne_pr, collusive_profit_per_round = coll_pr,
+       rounds = nr)
 }

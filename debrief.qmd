@@ -87,8 +87,9 @@ save_fig("cumulative_profit", plot_profit_paths(d, anon = params$anon))
 
 ```{r leaderboards}
 knitr::kable(transform(lb$individuals,
-  total_profit = round(total_profit), vs_ne = round(vs_ne)),
-  caption = "Players — profit, and profit vs. both firms playing NE every round")
+  total_profit = round(total_profit), vs_ne = round(vs_ne),
+  vs_collusive = round(vs_collusive)),
+  caption = "Players — total profit, vs. both firms playing NE every round, and vs. both firms colluding every round")
 knitr::kable(transform(lb$markets, market_profit = round(market_profit)),
   caption = "Markets — combined profit")
 ```
@@ -105,8 +106,11 @@ knitr::kable(dbf_prediction_table(d), caption = "Each student's predictions, the
 # Teachable moments
 
 ```{r flags-table}
-if (nrow(fr)) knitr::kable(fr[c("kind", "market_id", "round", "detail")]) else
-  cat("Nothing flagged for this session.\n")
+if (nrow(fr)) {
+  ft <- fr[c("kind", "market_id", "round", "detail", "rationale")]
+  names(ft) <- c("kind", "market", "round", "what happened", "why they said")
+  knitr::kable(ft)
+} else cat("Nothing flagged for this session.\n")
 ```
 
 ```{r flags-figs}
@@ -116,6 +120,8 @@ panels <- fr[fr$firm_label %in% c("Firm A", "Firm B"), , drop = FALSE]
 for (i in seq_len(nrow(panels))) {
   cat("\n\n## ", panels$kind[i], " — Market ", panels$market_id[i],
       ", round ", panels$round[i], "\n\n", sep = "")
+  if (nzchar(panels$rationale[i]))
+    cat("> ", panels$who[i], " said: *", panels$rationale[i], "*\n\n", sep = "")
   pl <- plot_best_response(d, panels$market_id[i], panels$round[i], panels$firm_label[i])
   print(save_fig(sprintf("best_response_m%s_r%s", panels$market_id[i], panels$round[i]),
                  pl, h = 4.5))
