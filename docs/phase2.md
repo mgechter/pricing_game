@@ -51,6 +51,14 @@ label, a big countdown, round / phase, "N of M submitted", and once round 1 is
 scored: the price-path chart (respecting the anon flag) and a cumulative-profit
 leaderboard. `app.R` routes `?mode=display` → `display_server`.
 
+## Admin round grid
+
+- A **Why** column shows each student's "why this price?" rationale next to Price
+  and Profit, and stays visible after scoring (rationale + outcome side by side).
+- The standalone **Re-score** button is gone. A "Re-score this round" control
+  (with the carry-forward option) appears on the scored screen **only when the
+  round had a no-show**; a clean round just shows "Next round".
+
 ## Migrations
 
 `db_init()` adds the new columns to existing databases

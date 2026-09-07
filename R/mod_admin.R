@@ -417,11 +417,17 @@ ad_market_table <- function(st) {
   }
   profit_of <- function(id) { v <- res$profit[res$player_id == id]
     if (length(v)) money0(v) else "" }
+  why_of <- function(id) {
+    v <- sub$rationale[sub$player_id == id]
+    if (!length(v) || is.na(v[1]) || !nzchar(trimws(v[1]))) return("")
+    w <- trimws(v[1]); if (nchar(w) > 60) paste0(substr(w, 1, 57), "…") else w
+  }
   data.frame(
     Market = p$market_id,
     Firm   = p$firm_label,
     Player = p$display_name,
     Price  = vapply(p$player_id, price_of, ""),
+    Why    = vapply(p$player_id, why_of, ""),
     Profit = vapply(p$player_id, profit_of, ""),
     check.names = FALSE)
 }
@@ -443,6 +449,8 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
                            value = isTRUE((s$auto_advance %||% 0) == 1)))),
     shiny::column(4, shiny::div(style = "margin-top:2rem;font-weight:600;",
       shiny::textOutput(ns("round_timer")))))
+  round_res <- st$results[st$results$round == s$current_round, , drop = FALSE]
+  had_noshow <- any(round_res$no_submission == 1)
   controls <- if (phase == "open")
     shiny::tagList(
       shiny::checkboxInput(ns("carry"),
@@ -453,8 +461,13 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
     shiny::tagList(
       shiny::actionButton(ns("advance"),
         if (s$current_round >= s$n_rounds) "Finish game" else "Next round",
-        class = "btn btn-primary"), " ",
-      shiny::actionButton(ns("score"), "Re-score", class = "btn btn-outline-secondary"))
+        class = "btn btn-primary"),
+      if (had_noshow) shiny::div(style = "margin-top:.75rem;",
+        shiny::checkboxInput(ns("carry"),
+          "Carry forward the missing prices instead of scoring the no-shows out of the market",
+          value = carry),
+        shiny::actionButton(ns("score"), "Re-score this round",
+                            class = "btn btn-outline-secondary")))
 
   shiny::div(class = "card",
     shiny::div(class = "card-header",
