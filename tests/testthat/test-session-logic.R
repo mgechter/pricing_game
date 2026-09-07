@@ -180,29 +180,34 @@ test_that("shadow faces the host's effective price, incl. when the host no-shows
   expect_true(is.na(sr$rival_price))
 })
 
-test_that("round timer: set, count down, and flag auto-advance", {
+test_that("round timer: set, count down, and flag auto-score at 0:00", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
   join(con, sid, c("a", "b"))
   expect_true(is.na(sl_time_left(sl_session(con, sid))))    # lobby
 
-  sl_set_timer(con, sid, 60, auto_advance = TRUE)
+  sl_set_timer(con, sid, 60)                                # timer on, no auto-advance
   sl_start_game(con, sid, seed = 1)
   s <- sl_session(con, sid)
   expect_equal(s$round_seconds, 60)
+  expect_equal(s$auto_advance, 0)
   tl <- sl_time_left(s)
   expect_true(tl > 55 && tl <= 60)
-  expect_false(sl_should_auto_advance(s))                   # time still left
+  expect_false(sl_should_auto_score(s))                     # time still left
 
   # pretend the round started 61 s ago
   db_run(con, "UPDATE sessions SET round_started_at = ? WHERE session_id = ?",
          list(as.numeric(Sys.time()) - 61, sid))
   s <- sl_session(con, sid)
   expect_lte(sl_time_left(s), 0)
-  expect_true(sl_should_auto_advance(s))
+  expect_true(sl_should_auto_score(s))                      # any timer -> auto-score on expiry
+
+  sl_set_timer(con, sid, 45, auto_advance = TRUE)
+  expect_equal(sl_session(con, sid)$auto_advance, 1)
 
   sl_set_timer(con, sid, 0)                                 # timer off
   expect_true(is.na(sl_time_left(sl_session(con, sid))))
+  expect_false(sl_should_auto_score(sl_session(con, sid)))
 })
 
 test_that("anonymous flag round-trips", {

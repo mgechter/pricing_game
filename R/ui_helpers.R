@@ -28,6 +28,18 @@ stat_block <- function(label, value) shiny::div(
   shiny::div(style = "font-size:1.4rem; font-weight:600;", value)
 )
 
+# A styled countdown. `tl` = seconds left (NA -> nothing). Colour shifts
+# green -> amber -> red; at 0 it reads "0:00".
+countdown_tag <- function(tl, size = "2.2rem", note = NULL) {
+  if (length(tl) != 1 || is.na(tl)) return(NULL)
+  col <- if (tl <= 0) "#dc3545" else if (tl <= 15) "#fd7e14" else "#198754"
+  txt <- if (tl <= 0) "0:00" else sprintf("%d:%02d", tl %/% 60, floor(tl) %% 60)
+  shiny::div(
+    style = sprintf("font-weight:700;font-variant-numeric:tabular-nums;line-height:1;color:%s;font-size:%s;", col, size),
+    txt,
+    if (!is.null(note)) shiny::div(style = "font-size:.85rem;font-weight:500;color:#6c757d;", note))
+}
+
 base_url <- function(session) {
   cd   <- session$clientData
   port <- if (!is.null(cd$url_port) && nzchar(cd$url_port)) paste0(":", cd$url_port) else ""

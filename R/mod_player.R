@@ -80,12 +80,11 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
   })
 
   # Independent of screen_key so the countdown never rebuilds the price input.
-  output$timer <- shiny::renderText({
+  output$timer <- shiny::renderUI({
     shiny::invalidateLater(1000)
-    st <- state(); if (is.null(st)) return("")
-    tl <- sl_time_left(st$session)
-    if (is.na(tl)) "" else if (tl <= 0) "Time's up — the instructor will close the round."
-    else sprintf("%d:%02d left", tl %/% 60, floor(tl) %% 60)
+    st <- state(); if (is.null(st)) return(NULL)
+    countdown_tag(sl_time_left(st$session), size = "3.4rem",
+                  note = "round closes at 0:00")
   })
 })
 
@@ -153,9 +152,9 @@ pl_round <- function(ns, p, st, sub) {
     shiny::div(class = "card-header",
       sprintf("Round %d of %d", st$session$current_round, st$session$n_rounds)),
     shiny::div(class = "card-body",
+      shiny::div(style = "text-align:center;margin-bottom:.75rem;",
+                 shiny::uiOutput(ns("timer"))),
       shiny::p(shiny::strong(who)),
-      shiny::div(class = "pg-muted", style = "margin-bottom:.5rem;",
-                 shiny::textOutput(ns("timer"), inline = TRUE)),
       shiny::numericInput(ns("price"), "Your price ($)",
         value = if (is.na(last)) NULL else last, min = 0, step = 1),
       shiny::textAreaInput(ns("rationale"), "Why this price? (optional)",

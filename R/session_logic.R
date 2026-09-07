@@ -369,9 +369,11 @@ sl_state_stamp <- function(con, session_id) {
         sep = "|")
 }
 
-# Timer expired and auto-advance is on? (checked by the admin app while connected)
-sl_should_auto_advance <- function(s) {
-  isTRUE((s$auto_advance %||% 0) == 1) && s$phase == "open" &&
+# Timer has run out on an open round (checked by the admin app while connected).
+# When true the admin auto-closes and scores the round; if `auto_advance` is also
+# set it then moves to the next round, otherwise it waits for the instructor.
+sl_should_auto_score <- function(s) {
+  (s$round_seconds %||% 0) > 0 && s$phase == "open" &&
     !is.na(tl <- sl_time_left(s)) && tl <= 0
 }
 

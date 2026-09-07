@@ -23,17 +23,23 @@ random already-paired student as a **shadow**:
 ## Round timer
 
 New session columns: `round_started_at`, `round_seconds` (0 = off),
-`auto_advance`. Set on `round_started_at` whenever a round opens
+`auto_advance`. `round_started_at` is set whenever a round opens
 (`sl_start_game`, `sl_advance_round`).
 
-- `sl_set_timer(con, sid, seconds, auto_advance=)` and `sl_set_anonymous(con, sid, x)`.
-- `sl_time_left(session_row)` → seconds left, or `NA` if no timer / not open.
-- The countdown renders in its own `textOutput` on the player, admin and
-  projector screens — **independent of the debounced screen render**, so it never
-  disturbs an in-progress price entry.
-- `auto_advance`: while the admin tab is open, an `observe(invalidateLater(2000))`
-  calls `sl_should_auto_advance()` and, on expiry, scores + advances once per
-  round (guarded by a `last_auto` reactiveVal).
+- `sl_set_timer(con, sid, seconds, auto_advance=)`, `sl_set_anonymous(con, sid, x)`.
+- `sl_time_left(session_row)` → seconds left, `NA` if no timer / not open.
+- **Big countdown** (`countdown_tag()` in `ui_helpers.R`, green → amber → red) on
+  the player, admin and projector screens, each in its own `uiOutput` —
+  **independent of the debounced screen render**, so ticking never disturbs an
+  in-progress price entry.
+- **At 0:00 the round auto-closes and scores** (any `round_seconds > 0`), then
+  sits in `scored` — the instructor clicks *Next round* when ready, so the clock
+  isn't perpetually running. An `observe(invalidateLater(1000))` in the admin
+  server calls `sl_should_auto_score()` once per round (guarded by a `last_auto`
+  reactiveVal); needs the admin tab open.
+- **`auto_advance`** (checkbox "Also advance to the next round automatically") is
+  opt-in — it chains `sl_advance_round()` after the auto-score, for continuous
+  flow in the last few rounds.
 
 Set the timer on the create screen or change it live on the round screen.
 

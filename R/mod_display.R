@@ -31,12 +31,10 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
     tryCatch(dbf_load(con, st$session$session_id), error = function(e) NULL)
   })
 
-  output$timer <- shiny::renderText({
+  output$timer <- shiny::renderUI({
     shiny::invalidateLater(1000)
-    st <- state(); if (is.null(st)) return("")
-    tl <- sl_time_left(st$session)
-    if (is.na(tl)) "" else if (tl <= 0) "TIME'S UP"
-    else sprintf("%d:%02d", tl %/% 60, floor(tl) %% 60)
+    st <- state(); if (is.null(st)) return(NULL)
+    countdown_tag(sl_time_left(st$session), size = "5rem")
   })
   output$price_chart <- shiny::renderPlot({
     shiny::req(d()); plot_price_paths(d(), anon = anon())
@@ -56,9 +54,9 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
     if (is.null(st)) return(shiny::h1("Waiting for the game to start…"))
     s <- st$session; rs <- st$round_status
     shiny::tagList(
-      shiny::div(style = "display:flex;justify-content:space-between;align-items:baseline;gap:2rem;",
+      shiny::div(style = "display:flex;justify-content:space-between;align-items:center;gap:2rem;",
         shiny::h1(st$game$label),
-        shiny::h1(class = "num", shiny::textOutput(ns("timer"), inline = TRUE))),
+        shiny::uiOutput(ns("timer"))),
       shiny::h2(sprintf("Round %d of %d — %s", s$current_round, s$n_rounds, s$phase)),
       shiny::h2(class = "num", sprintf("%d of %d submitted", rs$n_submitted, rs$n_expected)),
       if (nrow(st$results))

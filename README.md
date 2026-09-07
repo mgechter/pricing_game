@@ -80,9 +80,11 @@ ignored). If it ever gets orphaned: `kill $(lsof -ti tcp:3838)`.
    - Missing a price → that student is scored **out of the market** ($0; the
      rival gets the sole-seller outcome). Tick **carry forward** first to reuse
      their previous-round price instead.
-   - Set a **timer** (seconds) on the create screen or the round screen; tick
-     **auto-score & advance** to have the round close itself when it expires
-     (needs the admin tab open).
+   - Set a **timer** (seconds) on the create screen or the round screen. A big
+     countdown shows on every screen; at 0:00 the round **closes and scores
+     itself**, then waits for you to click *Next round* (needs the admin tab
+     open). Tick **also advance automatically** to skip that pause — handy in the
+     last few rounds.
    - **Hide names** puts "Firm A / B" on the projector and debrief instead.
 6. After the last round: leaderboard, then the **Debrief** tab.
 

@@ -254,12 +254,12 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     })
 
   # ---- round timer -----------------------------------------------------------
-  output$round_timer <- shiny::renderText({
+  output$round_timer <- shiny::renderUI({
     shiny::invalidateLater(1000)
-    st <- state(); if (is.null(st)) return("")
-    tl <- sl_time_left(st$session)
-    if (is.na(tl)) "" else if (tl <= 0) "⏱  Time's up."
-    else sprintf("⏱  %d:%02d left in the round", tl %/% 60, floor(tl) %% 60)
+    st <- state(); if (is.null(st)) return(NULL)
+    countdown_tag(sl_time_left(st$session), size = "3rem",
+      note = if (isTRUE((st$session$auto_advance %||% 0) == 1))
+        "auto-scores, then moves on" else "auto-scores at 0:00 — you click Next round")
   })
   shiny::observeEvent(list(input$timer_now, input$auto_now), {
     st <- state(); shiny::req(st, st$session$phase %in% c("open", "scored"))
@@ -268,12 +268,22 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
 
   last_auto <- shiny::reactiveVal(-1L)
   shiny::observe({
-    shiny::invalidateLater(2000)
+    shiny::invalidateLater(1000)
     st <- shiny::isolate(state()); if (is.null(st)) return()
-    if (sl_should_auto_advance(st$session) && last_auto() != st$session$current_round) {
-      last_auto(st$session$current_round)
-      guard({ sl_score_round(con, sid(), carry_forward = carry_rv()); sl_advance_round(con, sid()) })
-      shiny::showNotification("Timer expired — round scored and advanced.", type = "message")
+    s <- st$session
+    if (sl_should_auto_score(s) && last_auto() != s$current_round) {
+      last_auto(s$current_round)
+      guard({
+        sl_score_round(con, sid(), carry_forward = carry_rv())
+        if (isTRUE((s$auto_advance %||% 0) == 1)) {
+          sl_advance_round(con, sid())
+          shiny::showNotification(sprintf("Timer expired — round %d scored, moving on.", s$current_round),
+                                  type = "message")
+        } else {
+          shiny::showNotification(sprintf("Timer expired — round %d scored. Click Next round when ready.", s$current_round),
+                                  type = "message", duration = 6)
+        }
+      })
     }
   })
 
@@ -319,9 +329,12 @@ ad_create <- function(ns, choices) shiny::div(class = "card",
       shiny::column(4, shiny::numericInput(ns("new_timer"),
         "Round timer (seconds, 0 = off)", value = 0, min = 0, step = 15)),
       shiny::column(4, shiny::div(style = "margin-top:1.9rem;",
-        shiny::checkboxInput(ns("new_auto"), "Auto-score & advance when it expires", FALSE))),
+        shiny::checkboxInput(ns("new_auto"), "Also advance to the next round automatically", FALSE))),
       shiny::column(4, shiny::div(style = "margin-top:1.9rem;",
         shiny::checkboxInput(ns("new_anon"), "Hide names on projector / debrief", FALSE)))),
+    shiny::p(class = "pg-muted", style = "margin-top:-.5rem;font-size:.9rem;",
+      "With a timer set, the round closes and scores itself at 0:00; you click Next round. ",
+      "Tick “also advance” to keep the class moving without a pause (handy in the last few rounds)."),
     shiny::actionButton(ns("create"), "Create session", class = "btn btn-primary"),
     shiny::p(class = "pg-muted", style = "margin-top:.75rem;",
       "Sessions are saved automatically — see the History tab to revisit or export past ones. ",
@@ -442,13 +455,13 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
               paste(shad$display_name, collapse = ", "), paste(hosts, collapse = ", ")))
   }
   timer_row <- shiny::fluidRow(
-    shiny::column(4, shiny::numericInput(ns("timer_now"), "Round timer (s)",
-      value = s$round_seconds %||% 0, min = 0, step = 15)),
-    shiny::column(4, shiny::div(style = "margin-top:1.9rem;",
-      shiny::checkboxInput(ns("auto_now"), "Auto-score & advance on expiry",
-                           value = isTRUE((s$auto_advance %||% 0) == 1)))),
-    shiny::column(4, shiny::div(style = "margin-top:2rem;font-weight:600;",
-      shiny::textOutput(ns("round_timer")))))
+    shiny::column(7, shiny::div(style = "text-align:center;",
+      shiny::uiOutput(ns("round_timer")))),
+    shiny::column(5,
+      shiny::numericInput(ns("timer_now"), "Round timer (seconds, 0 = off)",
+        value = s$round_seconds %||% 0, min = 0, step = 15),
+      shiny::checkboxInput(ns("auto_now"), "Also advance to the next round automatically",
+        value = isTRUE((s$auto_advance %||% 0) == 1))))
   round_res <- st$results[st$results$round == s$current_round, , drop = FALSE]
   had_noshow <- any(round_res$no_submission == 1)
   controls <- if (phase == "open")
