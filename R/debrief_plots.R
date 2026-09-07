@@ -37,8 +37,9 @@ plot_price_paths <- function(d, anon = FALSE) {
 }
 
 plot_avg_price <- function(d) {
-  sub <- d$submissions[!is.na(d$submissions$price), ]
-  ap  <- aggregate(price ~ round, sub, mean)
+  # from results (scored rounds only) so it never shows a half-formed round
+  res <- d$results[!is.na(d$results$price), ]
+  ap  <- aggregate(price ~ round, res, mean)
   ln  <- .benchmark_lines(d$benchmarks)
 
   ggplot(ap, aes(round, price)) +

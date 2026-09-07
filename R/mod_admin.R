@@ -502,7 +502,7 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
           "Re-score, carrying the no-shows' last-round prices forward",
           class = "btn btn-outline-secondary"),
         shiny::div(class = "pg-muted", style = "font-size:.85rem;margin-top:.25rem;",
-          "Use this only if a student was mid-typing when the round closed — it swaps their $0 for the price they had last round.")))
+          "For students who did not submit this round, swap $0 for the price they posted last round.")))
 
   shiny::div(class = "card",
     shiny::div(class = "card-header",

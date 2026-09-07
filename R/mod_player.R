@@ -84,7 +84,36 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
     shiny::invalidateLater(1000)
     st <- state(); if (is.null(st)) return(NULL)
     countdown_tag(sl_time_left(st$session), size = "3.4rem",
-                  note = "round closes at 0:00")
+                  note = "round closes at 0:00 — a price in the box is sent automatically")
+  })
+
+  # In the last few seconds, auto-send whatever valid price is in the box so a
+  # student who's typed a number but not hit Submit isn't scored as a no-show.
+  auto_done <- shiny::reactiveVal(-1L)
+  shiny::observe({
+    shiny::invalidateLater(1000)
+    st <- state(); p <- me()
+    if (is.null(st) || is.null(p)) return()
+    s <- st$session
+    if (s$phase != "open" || auto_done() == s$current_round) return()
+    tl <- sl_time_left(s)
+    if (is.na(tl) || tl > 5) return()                       # only the last ~5 s
+    price <- suppressWarnings(as.numeric(shiny::isolate(input$price)))
+    if (is.na(price) || price < 0) return()                 # nothing usable typed
+    sub <- shiny::isolate(my_submission())
+    if (!is.null(sub) && isTRUE(sub$price[1] == price)) {    # already sent this value
+      auto_done(s$current_round); return()
+    }
+    ok <- tryCatch({
+      sl_submit(con, s$session_id, p$player_id, s$current_round, price,
+                shiny::isolate(input$rationale) %||% "")
+      TRUE
+    }, error = function(e) FALSE)
+    if (ok) {
+      auto_done(s$current_round)
+      shiny::showNotification("Time's up — your price was submitted automatically.",
+                              type = "message", duration = 4)
+    }
   })
 })
 

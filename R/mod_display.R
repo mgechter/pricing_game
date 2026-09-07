@@ -5,6 +5,9 @@
 #   summary     average price per round + leaderboard   (default)
 #   scoreboard  leaderboard only
 #   detail      per-market price paths + leaderboard     (busy with many teams)
+#
+# The chart and leaderboard update ONLY when a round is scored — not as students
+# submit. The submission counter and the countdown stay live.
 
 display_ui <- function(id) {
   ns <- shiny::NS(id)
@@ -28,13 +31,27 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
       if (is.null(s)) NULL else sl_load_state(con, s$session_id)
     })
 
-  anon <- function() isTRUE(state()$session$anonymous == 1)
-  view <- function() state()$session$projector_view %||% "summary"
-
-  d <- shiny::reactive({
+  # Reload the debrief data only when the *scored* picture changes (round scored,
+  # phase change, anon / view toggled) — not on every submission.
+  d_key <- shiny::reactiveVal("")
+  shiny::observe({
     st <- state()
+    k <- if (is.null(st)) "none" else paste(
+      st$session$session_id, st$session$phase, st$session$current_round,
+      nrow(st$results), st$session$anonymous %||% 0,
+      st$session$projector_view %||% "summary")
+    if (!identical(k, shiny::isolate(d_key()))) d_key(k)
+  })
+  d <- shiny::reactive({
+    d_key()
+    st <- shiny::isolate(state())
     if (is.null(st) || !nrow(st$results)) return(NULL)
-    tryCatch(dbf_load(con, st$session$session_id), error = function(e) NULL)
+    dd <- tryCatch(dbf_load(con, st$session$session_id), error = function(e) NULL)
+    if (!is.null(dd)) {
+      dd$anon <- isTRUE((st$session$anonymous %||% 0) == 1)
+      dd$view <- st$session$projector_view %||% "summary"
+    }
+    dd
   })
 
   output$timer <- shiny::renderUI({
@@ -43,15 +60,16 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
     countdown_tag(sl_time_left(st$session), size = "5rem")
   })
   output$chart <- shiny::renderPlot({
-    shiny::req(d())
-    if (view() == "detail") plot_price_paths(d(), anon = TRUE) else plot_avg_price(d())
+    dd <- shiny::req(d())
+    if (dd$view == "detail") plot_price_paths(dd, anon = TRUE) else plot_avg_price(dd)
   }, height = 480)
   output$lb <- shiny::renderTable({
-    shiny::req(d())
-    lb <- dbf_leaderboards(d())$individuals
+    dd <- shiny::req(d())
+    lb <- dbf_leaderboards(dd)$individuals
     data.frame(
       Rank = seq_len(nrow(lb)),
-      Firm = if (anon()) sprintf("Market %s · %s", lb$market_id, lb$firm_label) else lb$display_name,
+      Firm = if (dd$anon) sprintf("Market %s · %s", lb$market_id, lb$firm_label)
+             else lb$display_name,
       Profit = vapply(lb$total_profit, money0, ""),
       check.names = FALSE)
   }, striped = TRUE, width = "100%")
@@ -70,7 +88,8 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
       if (!have_results)
         shiny::h2("Results appear here once round 1 is scored.")
       else shiny::tagList(
-        if (view() != "scoreboard") shiny::plotOutput(ns("chart"), height = "480px"),
+        if ((s$projector_view %||% "summary") != "scoreboard")
+          shiny::plotOutput(ns("chart"), height = "480px"),
         shiny::h2("Leaderboard"),
         shiny::tableOutput(ns("lb"))))
   })

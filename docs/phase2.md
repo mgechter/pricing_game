@@ -37,6 +37,10 @@ New session columns: `round_started_at`, `round_seconds` (0 = off),
   isn't perpetually running. An `observe(invalidateLater(1000))` in the admin
   server calls `sl_should_auto_score()` once per round (guarded by a `last_auto`
   reactiveVal); needs the admin tab open.
+- **Player auto-submit:** in the last ~5 s each player screen sends whatever
+  valid number is in the price box (if it wasn't already submitted), so a student
+  who typed a price but didn't hit Submit isn't scored as a no-show. An empty box
+  is left alone. Guarded by a per-round `auto_done` reactiveVal.
 - **`auto_advance`** (checkbox "Also advance to the next round automatically") is
   opt-in — it chains `sl_advance_round()` after the auto-score, for continuous
   flow in the last few rounds.
@@ -66,6 +70,13 @@ screen or live on the round screen:
 
 The leaderboard honours `anonymous`; the summary chart has no names by
 construction; `detail` always uses Firm/Market labels.
+
+**Update cadence:** the chart and leaderboard refresh **only when a round is
+scored**, not as students submit — `d` in `mod_display.R` is gated on a
+`reactiveVal` key of `(phase, current_round, nrow(results), anon, view)`.
+`plot_avg_price()` reads from `results` (scored rounds) rather than `submissions`,
+so a half-finished round never shows. The submission counter and countdown stay
+live.
 
 ## Admin round grid
 
