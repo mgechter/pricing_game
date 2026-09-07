@@ -8,3 +8,7 @@ data/
 figs/
 debrief.html
 debrief_files/
+
+# internal planning + raw 2026 course output (kept locally, not published)
+zzz-*/
+PLAN.md

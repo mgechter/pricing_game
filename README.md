@@ -9,7 +9,6 @@ Self-contained: one R process, one SQLite file. Runs on a laptop and is exposed
 to the class for the hour with a tunnel (ngrok / Tailscale). No accounts, no
 database server.
 
-- Design & status: [`PLAN.md`](PLAN.md)
 - How a class session works, in detail: [`docs/phase1-mvp.md`](docs/phase1-mvp.md)
 - The output/debrief pipeline: [`docs/phase1.5-output.md`](docs/phase1.5-output.md)
 
@@ -255,8 +254,7 @@ scripts/
   run_app.R  run_tests.R  render_figs.R
   seed_demo.R          wipe + fill the DB with demo data
   playtest_bot.R       drive the students during a live play-test
-tests/testthat/        227 tests
-zzz-2026-output/  zzz-dynamic_pricing_lab/   reference material (prior versions)
+tests/testthat/        test suite
 ```
 
 ---
