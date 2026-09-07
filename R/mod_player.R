@@ -92,9 +92,14 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
     }
     if (!is.null(sub) && isTRUE(sub$price[1] == price) &&
         isTRUE((sub$rationale[1] %||% "") == (dd$r %||% ""))) return()   # unchanged
-    tryCatch(sl_submit(con, st$session$session_id, pl$player_id,
-                       st$session$current_round, price, dd$r %||% "", confirm = FALSE),
-             error = function(e) NULL)
+    ok <- tryCatch({
+      sl_submit(con, st$session$session_id, pl$player_id,
+                st$session$current_round, price, dd$r %||% "", confirm = FALSE)
+      TRUE
+    }, error = function(e) FALSE)
+    if (ok) shiny::removeNotification("save-err")
+    else shiny::showNotification("Couldn't save just now — retrying. Hit Submit to be sure.",
+                                 id = "save-err", type = "warning", duration = NULL)
   }, ignoreInit = TRUE)
 
   output$save_status <- shiny::renderText({

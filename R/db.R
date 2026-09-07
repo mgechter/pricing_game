@@ -77,10 +77,14 @@ DB_MIGRATIONS <- c(
 )
 
 db_connect <- function(path) {
+  if (is.null(path) || !nzchar(path))
+    stop("empty database path (PRICING_DB set but blank?)", call. = FALSE)
   con <- DBI::dbConnect(RSQLite::SQLite(), path)
   DBI::dbExecute(con, "PRAGMA journal_mode = WAL;")
-  DBI::dbExecute(con, "PRAGMA busy_timeout = 5000;")
+  DBI::dbExecute(con, "PRAGMA synchronous = NORMAL;")
+  DBI::dbExecute(con, "PRAGMA busy_timeout = 15000;")
   DBI::dbExecute(con, "PRAGMA foreign_keys = ON;")
+  DBI::dbExecute(con, "PRAGMA wal_autocheckpoint = 200;")
   con
 }
 
@@ -92,6 +96,27 @@ db_init <- function(con) {
   for (stmt in DB_MIGRATIONS) {
     tryCatch(DBI::dbExecute(con, stmt), error = function(e) NULL)  # already applied
   }
+  db_checkpoint(con)                                  # fold in any leftover WAL
+  invisible(TRUE)
+}
+
+db_checkpoint <- function(con) {
+  tryCatch(DBI::dbExecute(con, "PRAGMA wal_checkpoint(TRUNCATE);"),
+           error = function(e) NULL)
+}
+
+# Fail fast (and clearly) if another process is holding the write lock.
+db_assert_writable <- function(con) {
+  DBI::dbExecute(con, "PRAGMA busy_timeout = 800;")
+  ok <- tryCatch({
+    DBI::dbExecute(con, "BEGIN IMMEDIATE;")
+    DBI::dbExecute(con, "COMMIT;")
+    TRUE
+  }, error = function(e) { tryCatch(DBI::dbExecute(con, "ROLLBACK;"), error = function(e) NULL); FALSE })
+  DBI::dbExecute(con, "PRAGMA busy_timeout = 15000;")
+  if (!ok) stop(
+    "Cannot get a write lock on the database — another server is probably still running.\n",
+    "  Kill stale processes:  pkill -f 'run_app.R|playtest_bot.R'", call. = FALSE)
   invisible(TRUE)
 }
 

@@ -31,7 +31,9 @@ GAMES_PATH <- Sys.getenv("PRICING_GAMES",     "config/games.yaml")
 dir.create(dirname(DB_PATH), showWarnings = FALSE, recursive = TRUE)
 .con <- db_connect(DB_PATH)
 db_init(.con)
-onStop(function() try(DBI::dbDisconnect(.con), silent = TRUE))
+db_assert_writable(.con)          # stop now if a stale server still holds the lock
+message("database: ", normalizePath(DB_PATH))
+onStop(function() try({ db_checkpoint(.con); DBI::dbDisconnect(.con) }, silent = TRUE))
 
 ui <- page_fluid(
   theme = bs_theme(version = 5, primary = "#7a0019"),

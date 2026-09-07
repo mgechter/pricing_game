@@ -226,7 +226,11 @@ Environment variables (all optional):
 | `PLAYTEST_MINDELAY` / `PLAYTEST_MAXDELAY` | `2` / `18` | `playtest_bot.R` |
 
 The SQLite file (`data/`) is git-ignored. Stopping and restarting the app resumes
-every session exactly.
+every session exactly — **as long as only one process writes to it**. Run the app
+once (not several stale copies), and don't leave `playtest_bot.R` running against
+the real DB. If a startup fails with *"Cannot get a write lock"*, kill the
+leftovers: `pkill -f 'run_app.R|playtest_bot.R'`. The app prints its resolved
+database path on startup so you can confirm which file it's using.
 
 ---
 

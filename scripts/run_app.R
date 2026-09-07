@@ -24,7 +24,9 @@ if (dev) {
           "Do NOT use during a real class. (games.yaml changes only affect NEW sessions.)")
 }
 
-cat(sprintf("\n  Player:  http://127.0.0.1:%d/\n", port))
+cat(sprintf("\n  Database: %s\n", Sys.getenv("PRICING_DB", "data/pricing_game.sqlite")))
+cat(sprintf("  Player:  http://127.0.0.1:%d/\n", port))
 cat(sprintf("  Admin:   http://127.0.0.1:%d/?role=admin&key=%s\n\n", port, key))
+cat("  (if the app won't hold data, a stale server is running: pkill -f 'run_app.R|playtest_bot.R')\n\n")
 
 shiny::runApp("app.R", host = "0.0.0.0", port = port, launch.browser = FALSE)
