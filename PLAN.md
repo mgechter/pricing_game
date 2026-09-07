@@ -228,7 +228,7 @@ Each phase is runnable.
 | **1 — MVP** ✅ *done* | `app.R` + `R/db.R` `R/session_logic.R` `R/pairing.R` `R/mod_{player,admin}.R`. SQLite store (WAL, 1 s poll — live-updates on submit *and* on edit); student join/resume + submit + rationale, screen debounced so a rival's activity can't wipe an in-progress entry; admin create/start/close-score/advance/reset + CSV export; **History tab: full CRUD over saved sessions** (open/rename/delete/export, delete is the only data loss); random pairing, odd-N sits out; **no-show = scored out of the market** ($0; rival gets sole-seller outcome), carry-forward optional; per-round result cards; leaderboard. All 3 games run. `scripts/run_app.R` + tunnel. Docs: `docs/phase1-mvp.md`. |
 | **1.5 — Output / debrief** ✅ *done* | Export bundle (`sl_export_bundle` → tidy `results_long`/`submissions`/`pairs`/`benchmarks`, as ZIP + `.xlsx`); "Download a class bundle" in History (tick sessions). **Debrief tab** (`R/debrief_data.R` + `R/debrief_plots.R`, shared with the report): price paths, average price, cumulative profit, best-response explorer, auto-flagged teachable moments (profit swing / off-BR / tacit collusion / undercut cascade), player + market leaderboards with a vs-all-NE column; per-chart PNG + a figure-pack ZIP. Parametrised `debrief.qmd` (HTML, writes `figs/` PNGs) + `scripts/render_figs.R`. Benchmarks snap to clean values. 227 tests. Docs: `docs/phase1.5-output.md`. |
 | **2 — Full v1** ✅ *done* | **Projector page** `?mode=display` (`R/mod_display.R` — game, countdown, submission count, live price paths, leaderboard). **Round timer** — `sessions.round_seconds` / `round_started_at`; countdown in its own `textOutput` on every screen (never disturbs the price input); optional `auto_advance` while the admin tab is open. **Shadow pairing** — odd headcount attaches the leftover student to a paired student as a shadow, scored 1-on-1 against the host's real prices; host not double-scored; nobody sits out. **Anonymity toggle** — `sessions.anonymous`; "Market N · Firm A/B" on projector + debrief. Lockstep kept. `V` stays 250. 246 tests. Docs: `docs/phase2.md`. |
-| **3 — Debrief** | Quarto report + in-app tab; auto-flagged teachable moments; predicted-vs-actual; best-response panels. |
+| **3 — Debrief** | *Report + tab + auto-flagged moments + best-response panels — **done in 1.5**.* Remaining: **predictions** (predict → observe → explain — see §8); student rationale surfaced next to flagged rounds; profit vs. the collusive benchmark alongside vs-NE; a class-level view stacking a period's three games; `debrief.qmd` theme file + one real end-to-end render. |
 | **4 — Identity, roster & teams** *(deferred — see §7)* | Class layer + persistent identity so students don't re-join between games; roster with a gradebook key so exports are pre-matched; teams of 2–3 students per firm, self-named. |
 | **5 — Extensions (as needed)** | Advertising decision; random re-pairing; random / hidden horizon; 3-firm / capacity markets; collusion-aware scoring. |
 
@@ -265,6 +265,89 @@ Not for the first classroom run. Captured so it isn't lost.
 Open sub-questions for when we pick this up: roster source (paste vs CSV vs LMS),
 impersonation check (name dropdown vs PIN), how teams form (self-select in a
 lobby vs instructor-assigned), whether class state spans multiple meetings.
+
+## 8. Predictions — predict → observe → explain
+
+Each student commits to a few predictions **before they can price round 1**, and
+the debrief plays them back. The commitment is the point: a written prediction
+turns a surprising result into productive disequilibrium instead of the passive
+"makes sense" that produces an *illusion* of understanding.
+
+**Pedagogical framing (not a build item, but drives the design).** Split theory
+into two doses. *Before playing:* only the payoff structure + best-response as a
+tool — **not** the NE value. *In the debrief:* derive NE, then immediately extend
+to the repeated game using the class's own collusion runs and defections as
+evidence, and explicitly reconcile "one-shot NE says price = MC" with "the player
+who colluded made 10×" — the lesson is *use the model that fits the actual
+strategic situation*, not "theory is for suckers".
+
+### Config — per game in `config/games.yaml`
+
+```yaml
+predictions:
+  - id: own_r1
+    type: numeric
+    prompt: "What price will you charge in round 1?"
+  - id: class_final
+    type: numeric
+    prompt: "What will the class's average price be in the final round?"
+  - id: ne_guess
+    type: numeric
+    prompt: "What do you think the Nash equilibrium price is?"
+    reference: 0            # optional — drawn as a line in the debrief histogram
+  - id: br_50
+    type: numeric
+    prompt: "Your rival charges $50. What's your best response?"
+    reference: 49
+  - id: can_hold
+    type: choice
+    choices: [Yes, No]
+    prompt: "Can you and your partner hold prices high for all 10 rounds?"
+  - id: why
+    type: text
+    optional: true
+    prompt: "In one sentence, why?"
+```
+
+Types: `numeric`, `choice` (needs `choices`), `text`. `reference` is a static
+theory answer for the predicted-vs-theory line. `optional: true` questions don't
+block entry. v1 questions must be answerable *before any play* — no "predict your
+rival's next move" (that would need a mid-game prompt; a later add).
+
+### Flow
+
+- Session's game has `predictions:` → after **Start game**, a joined student sees
+  the **prediction screen first**; the round-1 price card is gated until every
+  required question is answered. Answers **lock on submit** (a commitment).
+- Late joiners / shadows added after round 1 skip predictions.
+- Admin has a **"let everyone into round 1"** override, and sees a
+  "predictions: N of M" count next to the submission count.
+- Not graded for accuracy — the UI says so. The export carries a per-student
+  completion flag for the participation mark.
+
+### Schema
+
+`predictions(session_id, player_id, qid, answer, answered_at)`,
+PK `(session_id, player_id, qid)`. Added via `DB_MIGRATIONS`.
+`sl_set_prediction()` / `sl_predictions(session_id)` / a `predictions_open`
+gate in `sl_round_status`.
+
+### Debrief
+
+New **Predictions** section in the tab and `debrief.qmd`:
+- per `numeric` question: a histogram of the class's predictions with vertical
+  lines for the `reference` value and, where computable, the actual outcome
+  (`class_final` → mean of the last round's prices; `own_r1` compared per
+  student to their real round-1 price);
+- per `choice` question: a bar of the split, plus what actually happened per
+  market (e.g. did the pair hold above NE every round);
+- a per-student table: their predictions next to their actual round-1 price and
+  final profit — for the "you predicted a cooperative market, then you opened at
+  $10" conversation.
+- `predictions.csv` in the export bundle.
+
+Auto-scoring each prediction against a computed actual is a stretch item; v1 =
+capture + distribution + `reference` line + the per-student table.
 
 ## 6. Parameters — confirmed
 
