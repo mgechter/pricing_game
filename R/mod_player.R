@@ -48,9 +48,15 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
   # invalidate the renderUI on every poll tick (Shiny doesn't value-diff those),
   # rebuilding the price input and wiping whatever the student had typed when
   # *another* student submitted. It depends on this student's own state only.
+  predicts_pending <- shiny::reactive({
+    st <- state(); p <- me()
+    if (is.null(st) || is.null(p)) FALSE
+    else sl_player_predicts_pending(con, st$session, st$game, p$player_id)
+  })
+
   screen_key <- shiny::reactiveVal("init")
   shiny::observe({
-    k <- pl_screen_key(state(), me(), my_submission(), my_result())
+    k <- pl_screen_key(state(), me(), my_submission(), my_result(), predicts_pending())
     if (!identical(k, shiny::isolate(screen_key()))) screen_key(k)
   })
 
@@ -114,9 +120,37 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
               money0(sub$price[1]), carried)
   })
 
+  shiny::observeEvent(input$pred_submit, {
+    st <- state(); p <- me(); shiny::req(st, p)
+    qs <- game_predictions(st$game)
+    miss <- character(0); vals <- list()
+    for (q in qs) {
+      txt <- trimws(as.character(input[[paste0("pred_", q$id)]] %||% ""))
+      if (!nzchar(txt)) { if (!q$optional) miss <- c(miss, q$prompt); next }
+      if (q$type == "numeric" && is.na(suppressWarnings(as.numeric(txt)))) {
+        miss <- c(miss, q$prompt); next
+      }
+      vals[[q$id]] <- txt
+    }
+    if (length(miss)) {
+      shiny::showNotification(paste0("Please answer: ", paste(miss, collapse = "; ")),
+                              type = "error"); return()
+    }
+    for (id in names(vals))
+      tryCatch(sl_set_prediction(con, st$session$session_id, p$player_id, id, vals[[id]]),
+               error = function(e) NULL)
+    shiny::showNotification("Predictions locked in ✓", type = "message", duration = 3)
+  })
+
   output$screen <- shiny::renderUI({
     screen_key()                      # the only reactive dependency (see above)
-    shiny::isolate(pl_screen(ns, state(), me(), my_submission(), my_result()))
+    shiny::isolate({
+      st <- state(); p <- me()
+      pred <- if (!is.null(st) && !is.null(p) && isTRUE(predicts_pending()))
+        list(questions = game_predictions(st$game),
+             answers   = sl_predictions(con, st$session$session_id, p$player_id))
+      pl_screen(ns, st, p, my_submission(), my_result(), pred)
+    })
   })
 
   # Independent of screen_key so the countdown never rebuilds the price input.
@@ -157,7 +191,7 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
   })
 })
 
-pl_screen <- function(ns, st, p, sub, res) {
+pl_screen <- function(ns, st, p, sub, res, pred = NULL) {
     if (is.null(st))
       return(shiny::div(class = "card", shiny::div(class = "card-body",
         "No game is running yet. Keep this page open — it updates itself.")))
@@ -168,6 +202,8 @@ pl_screen <- function(ns, st, p, sub, res) {
     on_bench <- !is.null(p$market_id) && is.na(p$market_id) && ph != "lobby"
     if (on_bench) return(pl_card("You're sitting this one out",
       "There was an odd number of players, so you're on the bench for this game. Watch the projector — you're back next game."))
+
+    if (!is.null(pred)) return(pl_predict(ns, pred$questions, pred$answers))
 
     switch(ph,
       lobby    = pl_lobby(p, st),
@@ -181,11 +217,12 @@ pl_screen <- function(ns, st, p, sub, res) {
 # and when their result is (re)scored — deliberately NOT on their own submission
 # edits (auto-save writes on every keystroke) or on another student's activity,
 # either of which would rebuild the price input mid-type.
-pl_screen_key <- function(st, p, sub, res) {
+pl_screen_key <- function(st, p, sub, res, pred_pending = FALSE) {
   if (is.null(st)) return("no-game")
   if (is.null(p))  return(paste0("join|", st$session$phase))
   paste(st$session$phase, st$session$current_round,
         p$market_id %||% "NA", p$firm_label %||% "NA",
+        if (isTRUE(pred_pending)) "predict" else "-",
         if (is.null(res)) "-" else res$computed_at[1],
         sep = "|")
 }
@@ -209,6 +246,33 @@ pl_lobby <- function(p, st) shiny::div(class = "card",
     shiny::div(class = "pg-big", p$display_name),
     shiny::p(class = "pg-muted",
       sprintf("Waiting for the instructor to start. %d player(s) joined.", nrow(st$players)))))
+
+pl_predict <- function(ns, questions, answers) {
+  cur <- function(qid) {
+    v <- answers$answer[answers$qid == qid]
+    if (length(v)) v[1] else NULL
+  }
+  fields <- lapply(questions, function(q) {
+    id <- ns(paste0("pred_", q$id)); c0 <- cur(q$id)
+    switch(q$type,
+      numeric = shiny::numericInput(id, q$prompt,
+                  value = if (is.null(c0)) NA else suppressWarnings(as.numeric(c0)), step = 1),
+      choice  = shiny::selectInput(id, q$prompt,
+                  choices = c("Choose…" = "", stats::setNames(q$choices, q$choices)),
+                  selected = if (!is.null(c0)) c0 else ""),
+      text    = shiny::textAreaInput(id, paste0(q$prompt, "  (optional)"),
+                  value = c0 %||% "", rows = 2),
+      shiny::textInput(id, q$prompt, value = c0 %||% ""))
+  })
+  shiny::div(class = "card",
+    shiny::div(class = "card-header", "Before we start — your predictions"),
+    shiny::div(class = "card-body",
+      shiny::p(class = "pg-muted",
+        "You're graded on turning these in, not on being right. They lock once you submit."),
+      fields,
+      shiny::actionButton(ns("pred_submit"), "Lock in my predictions",
+                          class = "btn btn-primary")))
+}
 
 pl_round <- function(ns, p, st, sub) {
   submitted <- !is.null(sub)

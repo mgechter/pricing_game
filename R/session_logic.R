@@ -67,6 +67,7 @@ sl_clear_active <- function(con) meta_set(con, "active_session_id", "")
 sl_delete_session <- function(con, session_id) {
   db_run(con, "DELETE FROM submissions WHERE session_id = ?", list(session_id))
   db_run(con, "DELETE FROM results     WHERE session_id = ?", list(session_id))
+  db_run(con, "DELETE FROM predictions WHERE session_id = ?", list(session_id))
   db_run(con, "DELETE FROM players     WHERE session_id = ?", list(session_id))
   db_run(con, "DELETE FROM sessions    WHERE session_id = ?", list(session_id))
   if (identical(meta_get(con, "active_session_id"), as.character(session_id)))
@@ -77,12 +78,13 @@ sl_delete_session <- function(con, session_id) {
 sl_reset_to_lobby <- function(con, session_id) {
   db_run(con, "DELETE FROM submissions WHERE session_id = ?", list(session_id))
   db_run(con, "DELETE FROM results     WHERE session_id = ?", list(session_id))
+  db_run(con, "DELETE FROM predictions WHERE session_id = ?", list(session_id))
   db_run(con,
     "UPDATE players SET market_id = NULL, firm_label = NULL, shadow_of = NULL
      WHERE session_id = ?", list(session_id))
   db_run(con,
-    "UPDATE sessions SET phase = 'lobby', current_round = 0, round_started_at = NULL
-     WHERE session_id = ?", list(session_id))
+    "UPDATE sessions SET phase = 'lobby', current_round = 0, round_started_at = NULL,
+            predictions_forced = 0 WHERE session_id = ?", list(session_id))
   invisible(TRUE)
 }
 
@@ -168,6 +170,69 @@ sl_set_projector <- function(con, session_id, view) {
   view <- match.arg(as.character(view), c("summary", "scoreboard", "detail"))
   db_run(con, "UPDATE sessions SET projector_view = ? WHERE session_id = ?",
          list(view, session_id))
+  invisible(TRUE)
+}
+
+# --- predictions -----------------------------------------------------------
+
+sl_set_prediction <- function(con, session_id, player_id, qid, answer) {
+  s <- sl_session(con, session_id)
+  if (is.null(s)) stop("no such session", call. = FALSE)
+  if (s$phase != "open" || s$current_round != 1)
+    stop("predictions are only open before round 1", call. = FALSE)
+  db_run(con,
+    "INSERT INTO predictions (session_id, player_id, qid, answer, answered_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(session_id, player_id, qid)
+     DO UPDATE SET answer = excluded.answer, answered_at = excluded.answered_at",
+    list(session_id, player_id, qid, as.character(answer), now_epoch()))
+  invisible(TRUE)
+}
+
+sl_predictions <- function(con, session_id, player_id = NULL) {
+  if (is.null(player_id))
+    db_query(con,
+      "SELECT pr.*, p.display_name FROM predictions pr
+       JOIN players p ON p.player_id = pr.player_id
+       WHERE pr.session_id = ? ORDER BY pr.player_id, pr.qid", list(session_id))
+  else
+    db_query(con, "SELECT * FROM predictions WHERE session_id = ? AND player_id = ?",
+             list(session_id, player_id))
+}
+
+# TRUE if this player still has to answer required prediction questions.
+sl_player_predicts_pending <- function(con, s, game, player_id) {
+  if (is.null(s) || s$phase != "open" || (s$current_round %||% 0) != 1) return(FALSE)
+  if (isTRUE((s$predictions_forced %||% 0) == 1)) return(FALSE)
+  req <- game_required_qids(game)
+  if (!length(req)) return(FALSE)
+  done <- sl_predictions(con, s$session_id, player_id)$qid
+  !all(req %in% done)
+}
+
+sl_prediction_status <- function(con, session_id) {
+  s    <- sl_session(con, session_id)
+  game <- sl_game(s)
+  req  <- game_required_qids(game)
+  expected <- db_query(con,
+    "SELECT player_id, display_name FROM players
+     WHERE session_id = ? AND market_id IS NOT NULL", list(session_id))
+  ans <- db_query(con,
+    "SELECT player_id, qid FROM predictions WHERE session_id = ?", list(session_id))
+  done <- vapply(expected$player_id, function(pid)
+    length(req) == 0 || all(req %in% ans$qid[ans$player_id == pid]), logical(1))
+  list(
+    has_questions = length(req) > 0,
+    forced        = isTRUE((s$predictions_forced %||% 0) == 1),
+    n_expected    = nrow(expected),
+    n_done        = sum(done),
+    pending       = expected$display_name[!done]
+  )
+}
+
+sl_force_predictions <- function(con, session_id) {
+  db_run(con, "UPDATE sessions SET predictions_forced = 1 WHERE session_id = ?",
+         list(session_id))
   invisible(TRUE)
 }
 
@@ -380,10 +445,12 @@ sl_state_stamp <- function(con, session_id) {
   res <- db_query(con,
     "SELECT COUNT(*) n, COALESCE(MAX(computed_at), 0) t
        FROM results WHERE session_id = ?", list(session_id))
+  npred <- db_query(con, "SELECT COUNT(*) n FROM predictions WHERE session_id = ?",
+                    list(session_id))$n
   paste(s$phase, s$current_round, n_pl,
         sub$n, sprintf("%.3f", sub$t), res$n, sprintf("%.3f", res$t),
         s$round_seconds %||% 0, s$auto_advance %||% 0, s$anonymous %||% 0,
-        s$projector_view %||% "summary",
+        s$projector_view %||% "summary", s$predictions_forced %||% 0, npred,
         sep = "|")
 }
 
@@ -403,6 +470,7 @@ sl_load_state <- function(con, session_id) {
     game         = sl_game(s),
     players      = sl_players(con, session_id),
     round_status = sl_round_status(con, session_id),
+    pred_status  = sl_prediction_status(con, session_id),
     submissions  = db_query(con,
       "SELECT * FROM submissions WHERE session_id = ? AND round = ?",
       list(session_id, s$current_round)),

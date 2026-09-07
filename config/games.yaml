@@ -14,6 +14,10 @@
 #   demand.model   -> key in DEMAND_MODELS (resolve.R)
 #   demand.params  -> passed verbatim to the demand model
 #   benchmarks.ne / benchmarks.monopoly   a number, or "compute" (see equilibria.R)
+#   predictions   optional list of pre-game questions the student answers before
+#                 round 1; each: id, type (numeric | choice | text), prompt,
+#                 choices (for choice), reference (theory answer, drawn in the
+#                 debrief), optional: true (doesn't block entry)
 #
 # HOTELLING PARAMETER NOTE
 #   The share formula is  share_i = 0.5 + (p_j - p_i) / (2 * t * L),  with a
@@ -41,6 +45,13 @@ games:
     benchmarks:
       ne: compute         # = mc            = 0
       monopoly: compute   # = (choke+mc)/2  = 50
+    predictions:
+      - {id: own_r1,      type: numeric, prompt: "What price will you set in round 1?"}
+      - {id: class_final, type: numeric, prompt: "What will the class's average price be in the last round?"}
+      - {id: eq_guess,    type: numeric, prompt: "Where do you think prices end up in the long run?", reference: 0}
+      - {id: br_50,       type: numeric, prompt: "If your rival prices at $50, what price is best for you?", reference: 49}
+      - {id: can_hold,    type: choice,  choices: ["Yes", "No"], prompt: "Can you and your partner keep prices high the whole game?"}
+      - {id: why,         type: text,    optional: true, prompt: "One sentence — why?"}
 
   - id: hotelling_high
     label: "Differentiated products — high differentiation (t = 1)"
@@ -62,6 +73,12 @@ games:
       ne: compute         # = mc + t*L    = 100
       monopoly: compute   # = V - t*L/2   = 200
       collusive: compute  # with coverage decay, also 200
+    predictions:
+      - {id: own_r1,      type: numeric, prompt: "What price will you set in round 1?"}
+      - {id: class_final, type: numeric, prompt: "What will the class's average price be in the last round?"}
+      - {id: eq_guess,    type: numeric, prompt: "Where do you think prices end up in the long run?", reference: 100}
+      - {id: vs_bertrand, type: choice,  choices: [Higher, "About the same", Lower], prompt: "Compared with the Bertrand game, prices here will be…"}
+      - {id: why,         type: text,    optional: true, prompt: "One sentence — why?"}
 
   - id: hotelling_low
     label: "Differentiated products — low differentiation (t = 0.5)"
@@ -83,3 +100,9 @@ games:
       ne: compute         # = mc + t*L    = 50
       monopoly: compute   # = V - t*L/2   = 225
       collusive: compute  # with coverage decay, also 225
+    predictions:
+      - {id: own_r1,      type: numeric, prompt: "What price will you set in round 1?"}
+      - {id: class_final, type: numeric, prompt: "What will the class's average price be in the last round?"}
+      - {id: eq_guess,    type: numeric, prompt: "Where do you think prices end up with weaker differentiation?", reference: 50}
+      - {id: vs_high,     type: choice,  choices: [Higher, "About the same", Lower], prompt: "Compared with the strongly-differentiated game, prices here will be…"}
+      - {id: why,         type: text,    optional: true, prompt: "One sentence — why?"}

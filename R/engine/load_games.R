@@ -16,6 +16,34 @@ get_game <- function(id, path = "config/games.yaml") {
   g
 }
 
+# Normalise a game's `predictions` into a list of {id, type, prompt, choices,
+# reference, optional}. Handles both the raw yaml list and the data.frame it
+# becomes after a config_json round-trip.
+game_predictions <- function(game) {
+  p <- game$predictions
+  if (is.null(p) || length(p) == 0) return(list())
+  rows <- if (is.data.frame(p)) lapply(seq_len(nrow(p)), function(i) as.list(p[i, , drop = FALSE]))
+          else p
+  lapply(rows, function(q) {
+    ch <- q$choices
+    if (is.list(ch)) ch <- ch[[1]]
+    ref <- q$reference
+    list(
+      id       = as.character(q$id),
+      type     = as.character(q$type %||% "text"),
+      prompt   = as.character(q$prompt %||% q$id),
+      choices  = if (is.null(ch) || (length(ch) == 1 && is.na(ch))) NULL else as.character(ch),
+      reference = if (is.null(ref) || (length(ref) == 1 && is.na(ref))) NA_real_ else as.numeric(ref),
+      optional = isTRUE(q$optional) || isTRUE(as.logical(q$optional))
+    )
+  })
+}
+
+game_required_qids <- function(game) {
+  qs <- game_predictions(game)
+  vapply(Filter(function(q) !q$optional, qs), `[[`, "", "id")
+}
+
 # Fill in benchmark prices. Any entry that is missing or "compute" is derived:
 #   ne         numerically (fixed point of the best response)   -- model-agnostic
 #   collusive  numerically (argmax of joint profit)             -- model-agnostic

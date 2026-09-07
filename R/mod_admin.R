@@ -75,6 +75,12 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     st <- state(); shiny::req(st); guard(sl_advance_round(con, sid()))
   })
 
+  shiny::observeEvent(input$force_pred, {
+    st <- state(); shiny::req(st)
+    guard({ sl_force_predictions(con, sid())
+            shiny::showNotification("Everyone's into round 1.", type = "message") })
+  })
+
   shiny::observeEvent(input$proj_view, {
     st <- state(); shiny::req(st); guard(sl_set_projector(con, sid(), input$proj_view))
   }, ignoreInit = TRUE)
@@ -468,6 +474,19 @@ ad_market_table <- function(st) {
     check.names = FALSE)
 }
 
+ad_predictions_note <- function(ns, st, phase) {
+  ps <- st$pred_status
+  if (is.null(ps) || !isTRUE(ps$has_questions) || phase != "open" ||
+      st$session$current_round != 1) return(NULL)
+  shiny::div(style = "margin:.35rem 0;",
+    shiny::strong(sprintf("Predictions: %d of %d in.", ps$n_done, ps$n_expected)),
+    if (isTRUE(ps$forced)) " (gate released)"
+    else if (length(ps$pending)) shiny::span(
+      sprintf("  Waiting on: %s.  ", paste(ps$pending, collapse = ", ")),
+      shiny::actionButton(ns("force_pred"), "Let everyone into round 1",
+                          class = "btn btn-sm btn-outline-secondary")))
+}
+
 ad_round <- function(ns, st, phase, carry = FALSE) {
   s <- st$session; rs <- st$round_status
   shad <- st$players[!is.na(st$players$shadow_of), , drop = FALSE]
@@ -520,6 +539,7 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
           if (length(rs$unconfirmed))
             paste0("  Not yet submitted: ", paste(rs$unconfirmed, collapse = ", "))
           else "  Everyone's in — close the round.")),
+      ad_predictions_note(ns, st, phase),
       timer_row,
       html_table(ad_market_table(st)),
       shadow_note,

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   auto_advance     INTEGER NOT NULL DEFAULT 0,        -- also advance after the timer auto-scores
   anonymous        INTEGER NOT NULL DEFAULT 0,        -- hide names on projector / debrief
   projector_view   TEXT    NOT NULL DEFAULT 'summary', -- 'summary' | 'scoreboard' | 'detail'
+  predictions_forced INTEGER NOT NULL DEFAULT 0,      -- admin let everyone past the prediction gate
   created_at       REAL    NOT NULL
 );
 CREATE TABLE IF NOT EXISTS players (
@@ -44,6 +45,14 @@ CREATE TABLE IF NOT EXISTS submissions (
   confirmed    INTEGER NOT NULL DEFAULT 0,          -- 1 = student pressed Submit (done)
   submitted_at REAL    NOT NULL,
   PRIMARY KEY (session_id, round, player_id)
+);
+CREATE TABLE IF NOT EXISTS predictions (
+  session_id  INTEGER NOT NULL,
+  player_id   INTEGER NOT NULL,
+  qid         TEXT    NOT NULL,
+  answer      TEXT    NOT NULL,
+  answered_at REAL    NOT NULL,
+  PRIMARY KEY (session_id, player_id, qid)
 );
 CREATE TABLE IF NOT EXISTS results (
   session_id        INTEGER NOT NULL,
@@ -73,7 +82,8 @@ DB_MIGRATIONS <- c(
   "ALTER TABLE sessions ADD COLUMN auto_advance INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE sessions ADD COLUMN anonymous INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE sessions ADD COLUMN projector_view TEXT NOT NULL DEFAULT 'summary'",
-  "ALTER TABLE submissions ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 0"
+  "ALTER TABLE submissions ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sessions ADD COLUMN predictions_forced INTEGER NOT NULL DEFAULT 0"
 )
 
 db_connect <- function(path) {

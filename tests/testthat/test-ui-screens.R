@@ -84,3 +84,19 @@ test_that("odd headcount: the shadow player still gets a round view", {
   expect_false(is.na(sh$market_id))                  # in a market, not benched
   renders(pl_round(ns, sh, st, NULL))
 })
+
+test_that("prediction screen renders and gates pl_screen", {
+  con <- fresh_db()
+  ns  <- NS("t")
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  ids <- join(con, sid, c("a", "b"))
+  sl_start_game(con, sid, seed = 1)
+  st  <- sl_load_state(con, sid)
+  qs  <- game_predictions(st$game)
+  renders(pl_predict(ns, qs, sl_predictions(con, sid, ids[1])))
+
+  pl    <- st$players[st$players$player_id == ids[1], ]
+  gated <- pl_screen(ns, st, pl, NULL, NULL,
+                     pred = list(questions = qs, answers = sl_predictions(con, sid, ids[1])))
+  expect_true(grepl("your predictions", as.character(gated)))
+})

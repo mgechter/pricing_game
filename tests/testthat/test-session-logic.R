@@ -210,6 +210,36 @@ test_that("round timer: set, count down, and flag auto-score at 0:00", {
   expect_false(sl_should_auto_score(sl_session(con, sid)))
 })
 
+test_that("predictions gate round 1 and lift when answered or forced", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  ids <- join(con, sid, c("Ada", "Bo", "Cy", "Di"))
+  sl_start_game(con, sid, seed = 1)
+  s <- sl_session(con, sid); g <- sl_game(s)
+
+  req <- game_required_qids(g)
+  expect_gt(length(req), 0)
+  expect_true(sl_player_predicts_pending(con, s, g, ids[1]))
+
+  for (q in game_predictions(g))
+    if (!q$optional)
+      sl_set_prediction(con, sid, ids[1], q$id, if (q$type == "numeric") "30" else "Yes")
+  expect_false(sl_player_predicts_pending(con, s, g, ids[1]))     # Ada is through
+
+  ps <- sl_prediction_status(con, sid)
+  expect_true(ps$has_questions)
+  expect_equal(ps$n_done, 1)
+  expect_setequal(ps$pending, c("Bo", "Cy", "Di"))
+
+  sl_force_predictions(con, sid)
+  expect_false(sl_player_predicts_pending(con, sl_session(con, sid), g, ids[2]))
+
+  # predictions can't be set once the game moves past round 1
+  for (pid in ids) sl_submit(con, sid, pid, 1, 20)
+  sl_score_round(con, sid); sl_advance_round(con, sid)
+  expect_error(sl_set_prediction(con, sid, ids[1], "own_r1", "9"), "before round 1")
+})
+
 test_that("confirm is sticky and round status separates priced vs confirmed", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
