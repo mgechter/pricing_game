@@ -228,9 +228,42 @@ Each phase is runnable.
 | **1 — MVP** ✅ *done* | `app.R` + `R/db.R` `R/session_logic.R` `R/pairing.R` `R/mod_{player,admin}.R`. SQLite store (WAL, 1 s poll — live-updates on submit *and* on edit); student join/resume + submit + rationale, screen debounced so a rival's activity can't wipe an in-progress entry; admin create/start/close-score/advance/reset + CSV export; **History tab: full CRUD over saved sessions** (open/rename/delete/export, delete is the only data loss); random pairing, odd-N sits out; **no-show = scored out of the market** ($0; rival gets sole-seller outcome), carry-forward optional; per-round result cards; leaderboard. All 3 games run. `scripts/run_app.R` + tunnel. 173 tests. Docs: `docs/phase1-mvp.md`. |
 | **2 — Full v1** | Both Hotelling games; display / projector page; round timer; anonymity toggle; odd-N bot; carry-forward for no-shows. |
 | **3 — Debrief** | Quarto report + in-app tab; auto-flagged teachable moments; predicted-vs-actual; best-response panels. |
-| **4 — Extensions (as needed)** | Advertising decision; random re-pairing; random / hidden horizon; 3-firm / capacity markets; collusion-aware scoring. |
+| **4 — Identity, roster & teams** *(deferred — see §7)* | Class layer + persistent identity so students don't re-join between games; roster with a gradebook key so exports are pre-matched; teams of 2–3 students per firm, self-named. |
+| **5 — Extensions (as needed)** | Advertising decision; random re-pairing; random / hidden horizon; 3-firm / capacity markets; collusion-aware scoring. |
 
 ---
+
+## 7. Deferred — identity, roster & teams
+
+Not for the first classroom run. Captured so it isn't lost.
+
+**Problems it solves**
+- "New session" makes every student re-type their name — inefficient across the
+  three games in one class period.
+- No stable link between a student in the app and their row in the gradebook;
+  matching is manual and typo-prone (the 2026 data needed a hand-built
+  `name → ID` map).
+- A "firm" is usually a **team of 2–3 students**, not one person — the current
+  model has no notion of that.
+
+**Intended shape**
+- A **class** owns a **roster** (set up once) and holds many games. Running the
+  three games becomes **"Next game"** — same participants, fresh pairing, *no
+  rejoin*. "New class" is the rare action.
+- **Roster** = individuals with a **gradebook key** (student ID or email). Every
+  admin view and every CSV export carries that key next to the display name, so a
+  gradebook merge is a plain join.
+- **Teams**: students group into a firm (2–3 people) and **name the firm
+  themselves**; the team is the "player" in a session. Roster keys for all
+  members ride along on the team so individual credit is still recoverable.
+- **Persistent identity**: token in the browser (localStorage) + URL keyed to a
+  person/team, not a session; a returning student gets one-click rejoin, or
+  re-picks from a dropdown if the browser was cleared.
+- `players.team_id` / `teams.roster_ids[]`; `sessions.class_id`.
+
+Open sub-questions for when we pick this up: roster source (paste vs CSV vs LMS),
+impersonation check (name dropdown vs PIN), how teams form (self-select in a
+lobby vs instructor-assigned), whether class state spans multiple meetings.
 
 ## 6. Parameters — confirmed
 
