@@ -89,7 +89,9 @@ ignored). If it ever gets orphaned: `kill $(lsof -ti tcp:3838)`.
 6. After the last round: leaderboard, then the **Debrief** tab.
 
 Put `?mode=display` on the projector for a live big-screen view (round, timer,
-submission count, price paths, leaderboard).
+submission count, leaderboard, and a chart). The **Projector view** setting
+chooses the chart — *Summary* (one average-price line, the default), *Scoreboard
+only*, or *Detail* (per-market paths; busy past ~4 teams).
 
 Other admin tabs:
 

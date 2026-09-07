@@ -36,6 +36,8 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
         sl_set_timer(con, sid(), input$new_timer, auto_advance = isTRUE(input$new_auto))
       if (!is.null(input$new_anon))
         sl_set_anonymous(con, sid(), isTRUE(input$new_anon))
+      if (!is.null(input$new_proj))
+        sl_set_projector(con, sid(), input$new_proj)
       info <- sl_start_game(con, sid())
       if (!is.null(info$shadow)) {
         who <- db_one(con, "SELECT display_name FROM players WHERE player_id = ?",
@@ -62,9 +64,20 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     }
   })
 
+  shiny::observeEvent(input$rescore_cf, {
+    st <- state(); shiny::req(st)
+    r <- tryCatch(sl_score_round(con, sid(), carry_forward = TRUE), error = function(e) e)
+    if (inherits(r, "error")) shiny::showNotification(conditionMessage(r), type = "error")
+    else shiny::showNotification("Re-scored — missing prices carried forward.", type = "message")
+  })
+
   shiny::observeEvent(input$advance, {
     st <- state(); shiny::req(st); guard(sl_advance_round(con, sid()))
   })
+
+  shiny::observeEvent(input$proj_view, {
+    st <- state(); shiny::req(st); guard(sl_set_projector(con, sid(), input$proj_view))
+  }, ignoreInit = TRUE)
 
   shiny::observeEvent(input$reset, {
     st <- state(); shiny::req(st)
@@ -332,6 +345,11 @@ ad_create <- function(ns, choices) shiny::div(class = "card",
         shiny::checkboxInput(ns("new_auto"), "Also advance to the next round automatically", FALSE))),
       shiny::column(4, shiny::div(style = "margin-top:1.9rem;",
         shiny::checkboxInput(ns("new_anon"), "Hide names on projector / debrief", FALSE)))),
+    shiny::selectInput(ns("new_proj"), "Projector view",
+      choices = c("Summary — average price + leaderboard" = "summary",
+                  "Scoreboard only" = "scoreboard",
+                  "Detail — per-market price paths (busy with many teams)" = "detail"),
+      selected = "summary"),
     shiny::p(class = "pg-muted", style = "margin-top:-.5rem;font-size:.9rem;",
       "With a timer set, the round closes and scores itself at 0:00; you click Next round. ",
       "Tick “also advance” to keep the class moving without a pause (handy in the last few rounds)."),
@@ -461,7 +479,11 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
       shiny::numericInput(ns("timer_now"), "Round timer (seconds, 0 = off)",
         value = s$round_seconds %||% 0, min = 0, step = 15),
       shiny::checkboxInput(ns("auto_now"), "Also advance to the next round automatically",
-        value = isTRUE((s$auto_advance %||% 0) == 1))))
+        value = isTRUE((s$auto_advance %||% 0) == 1)),
+      shiny::selectInput(ns("proj_view"), "Projector view",
+        choices = c(Summary = "summary", `Scoreboard only` = "scoreboard",
+                    `Detail (per-market paths)` = "detail"),
+        selected = s$projector_view %||% "summary")))
   round_res <- st$results[st$results$round == s$current_round, , drop = FALSE]
   had_noshow <- any(round_res$no_submission == 1)
   controls <- if (phase == "open")
@@ -476,11 +498,11 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
         if (s$current_round >= s$n_rounds) "Finish game" else "Next round",
         class = "btn btn-primary"),
       if (had_noshow) shiny::div(style = "margin-top:.75rem;",
-        shiny::checkboxInput(ns("carry"),
-          "Carry forward the missing prices instead of scoring the no-shows out of the market",
-          value = carry),
-        shiny::actionButton(ns("score"), "Re-score this round",
-                            class = "btn btn-outline-secondary")))
+        shiny::actionButton(ns("rescore_cf"),
+          "Re-score, carrying the no-shows' last-round prices forward",
+          class = "btn btn-outline-secondary"),
+        shiny::div(class = "pg-muted", style = "font-size:.85rem;margin-top:.25rem;",
+          "Use this only if a student was mid-typing when the round closed — it swaps their $0 for the price they had last round.")))
 
   shiny::div(class = "card",
     shiny::div(class = "card-header",

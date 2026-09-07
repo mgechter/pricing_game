@@ -1,12 +1,17 @@
 # Projector / display module — read-only big-screen view for the room.
 #   URL:  <host>:3838/?mode=display
+#
+# What it shows is set per session by `projector_view`:
+#   summary     average price per round + leaderboard   (default)
+#   scoreboard  leaderboard only
+#   detail      per-market price paths + leaderboard     (busy with many teams)
 
 display_ui <- function(id) {
   ns <- shiny::NS(id)
   shiny::div(class = "pg-wide", style = "max-width:1400px;",
     shiny::tags$style(shiny::HTML(
       ".pg-disp h1{font-size:2.6rem;margin:.2rem 0} .pg-disp h2{font-size:1.8rem;color:#495057}
-       .pg-disp .num{font-variant-numeric:tabular-nums}")),
+       .pg-disp table{font-size:1.3rem}")),
     shiny::div(class = "pg-disp", shiny::uiOutput(ns("screen"))))
 }
 
@@ -24,6 +29,7 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
     })
 
   anon <- function() isTRUE(state()$session$anonymous == 1)
+  view <- function() state()$session$projector_view %||% "summary"
 
   d <- shiny::reactive({
     st <- state()
@@ -36,8 +42,9 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
     st <- state(); if (is.null(st)) return(NULL)
     countdown_tag(sl_time_left(st$session), size = "5rem")
   })
-  output$price_chart <- shiny::renderPlot({
-    shiny::req(d()); plot_price_paths(d(), anon = anon())
+  output$chart <- shiny::renderPlot({
+    shiny::req(d())
+    if (view() == "detail") plot_price_paths(d(), anon = TRUE) else plot_avg_price(d())
   }, height = 480)
   output$lb <- shiny::renderTable({
     shiny::req(d())
@@ -53,17 +60,18 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
     st <- state()
     if (is.null(st)) return(shiny::h1("Waiting for the game to start…"))
     s <- st$session; rs <- st$round_status
+    have_results <- nrow(st$results) > 0
     shiny::tagList(
       shiny::div(style = "display:flex;justify-content:space-between;align-items:center;gap:2rem;",
         shiny::h1(st$game$label),
         shiny::uiOutput(ns("timer"))),
       shiny::h2(sprintf("Round %d of %d — %s", s$current_round, s$n_rounds, s$phase)),
-      shiny::h2(class = "num", sprintf("%d of %d submitted", rs$n_submitted, rs$n_expected)),
-      if (nrow(st$results))
-        shiny::tagList(
-          shiny::plotOutput(ns("price_chart"), height = "480px"),
-          shiny::h2("Leaderboard"),
-          shiny::tableOutput(ns("lb")))
-      else shiny::h2("Results appear here once round 1 is scored."))
+      shiny::h2(sprintf("%d of %d submitted", rs$n_submitted, rs$n_expected)),
+      if (!have_results)
+        shiny::h2("Results appear here once round 1 is scored.")
+      else shiny::tagList(
+        if (view() != "scoreboard") shiny::plotOutput(ns("chart"), height = "480px"),
+        shiny::h2("Leaderboard"),
+        shiny::tableOutput(ns("lb"))))
   })
 })

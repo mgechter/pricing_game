@@ -210,12 +210,17 @@ test_that("round timer: set, count down, and flag auto-score at 0:00", {
   expect_false(sl_should_auto_score(sl_session(con, sid)))
 })
 
-test_that("anonymous flag round-trips", {
+test_that("anonymous + projector-view settings round-trip", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
   expect_equal(sl_session(con, sid)$anonymous, 0)
   sl_set_anonymous(con, sid, TRUE)
   expect_equal(sl_session(con, sid)$anonymous, 1)
+
+  expect_equal(sl_session(con, sid)$projector_view, "summary")   # default
+  sl_set_projector(con, sid, "detail")
+  expect_equal(sl_session(con, sid)$projector_view, "detail")
+  expect_error(sl_set_projector(con, sid, "nonsense"))
 })
 
 test_that("guard rails: phase and lobby restrictions", {

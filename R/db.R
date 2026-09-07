@@ -19,8 +19,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   config_json      TEXT    NOT NULL,
   round_started_at REAL,                              -- epoch when the current round opened
   round_seconds    INTEGER NOT NULL DEFAULT 0,        -- countdown length; 0 = no timer
-  auto_advance     INTEGER NOT NULL DEFAULT 0,        -- close+score+advance when the timer expires
+  auto_advance     INTEGER NOT NULL DEFAULT 0,        -- also advance after the timer auto-scores
   anonymous        INTEGER NOT NULL DEFAULT 0,        -- hide names on projector / debrief
+  projector_view   TEXT    NOT NULL DEFAULT 'summary', -- 'summary' | 'scoreboard' | 'detail'
   created_at       REAL    NOT NULL
 );
 CREATE TABLE IF NOT EXISTS players (
@@ -69,7 +70,8 @@ DB_MIGRATIONS <- c(
   "ALTER TABLE sessions ADD COLUMN round_started_at REAL",
   "ALTER TABLE sessions ADD COLUMN round_seconds INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE sessions ADD COLUMN auto_advance INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE sessions ADD COLUMN anonymous INTEGER NOT NULL DEFAULT 0"
+  "ALTER TABLE sessions ADD COLUMN anonymous INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sessions ADD COLUMN projector_view TEXT NOT NULL DEFAULT 'summary'"
 )
 
 db_connect <- function(path) {

@@ -164,6 +164,13 @@ sl_set_anonymous <- function(con, session_id, anonymous) {
   invisible(TRUE)
 }
 
+sl_set_projector <- function(con, session_id, view) {
+  view <- match.arg(as.character(view), c("summary", "scoreboard", "detail"))
+  db_run(con, "UPDATE sessions SET projector_view = ? WHERE session_id = ?",
+         list(view, session_id))
+  invisible(TRUE)
+}
+
 # seconds left in the current round, or NA if no timer / not open
 sl_time_left <- function(s) {
   if (is.null(s) || s$phase != "open" || (s$round_seconds %||% 0) <= 0) return(NA_real_)
@@ -366,6 +373,7 @@ sl_state_stamp <- function(con, session_id) {
   paste(s$phase, s$current_round, n_pl,
         sub$n, sprintf("%.3f", sub$t), res$n, sprintf("%.3f", res$t),
         s$round_seconds %||% 0, s$auto_advance %||% 0, s$anonymous %||% 0,
+        s$projector_view %||% "summary",
         sep = "|")
 }
 
