@@ -2500,7 +2500,7 @@
       "checksum": "2ab76df08e1e957864b9aedbe68a44aa"
     },
     "R/debrief_data.R": {
-      "checksum": "7c7c6312237e4f8da3699430c1aa653b"
+      "checksum": "22d6578b0f106f3326fdc8f066d1b183"
     },
     "R/debrief_plots.R": {
       "checksum": "348c0022a0c67b120d5d5516dcc0201f"
@@ -2530,13 +2530,13 @@
       "checksum": "010afafb87bdd903b7723640fcb1dad2"
     },
     "R/mod_admin.R": {
-      "checksum": "1a0ee7d19357afa42835eccdba5c3b3a"
+      "checksum": "de67b8643586c3e74de7c7ee5e05a81c"
     },
     "R/mod_display.R": {
-      "checksum": "33620031e2633e261d4942ae8604f00f"
+      "checksum": "cce16588fdb9cd5e67f2ce3c9b938e30"
     },
     "R/mod_player.R": {
-      "checksum": "aec4b1ff39bb8ef63c637e05c1bc0719"
+      "checksum": "9fbd371855127d62a03f135a965046ae"
     },
     "R/pairing.R": {
       "checksum": "2c1382048b736b862c4f4f27b06f561c"
@@ -2545,7 +2545,7 @@
       "checksum": "7cc85d7d9c49913eae26f7159b533aff"
     },
     "R/ui_helpers.R": {
-      "checksum": "7326a683649c87b1fbd20b0af3603b7e"
+      "checksum": "6efb9eccc58a3ad4ce2e0e6603698120"
     },
     "README.md": {
       "checksum": "2aff716bdbda1bc26ca997819f39e9b6"
@@ -2596,7 +2596,7 @@
       "checksum": "bead07431d477a7c5676ca24d0da412e"
     },
     "tests/testthat/test-ui-screens.R": {
-      "checksum": "cc0d250b28bdd1bc30231bf0ae7a1c8c"
+      "checksum": "0bafbd88d8d142722c9fdbecf079b64a"
     }
   },
   "users": null
