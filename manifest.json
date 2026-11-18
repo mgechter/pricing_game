@@ -2545,7 +2545,7 @@
       "checksum": "3d7e5c512b3a097fe7b02fb8e9e9331d"
     },
     "R/slide_figures.R": {
-      "checksum": "a793993d0ed6017d5653d8bc76fa8b86"
+      "checksum": "71e5cedbd95baebda4d38a5404814711"
     },
     "R/ui_helpers.R": {
       "checksum": "6efb9eccc58a3ad4ce2e0e6603698120"
@@ -2599,7 +2599,7 @@
       "checksum": "1f18ed07998f73ff255acb12be3cea1c"
     },
     "tests/testthat/test-slide-figures.R": {
-      "checksum": "caa28570685e6f3f407e59b969bacdfe"
+      "checksum": "d74437ab77387784d962e5e6a59a1336"
     },
     "tests/testthat/test-ui-screens.R": {
       "checksum": "35f92fb7f98537f8689e581f1b3a7530"
