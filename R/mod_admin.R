@@ -252,7 +252,16 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
       ggplot2::ggsave(file, expr(), device = dev, width = w, height = h, dpi = 200)
     })
 
-  output$db_price   <- shiny::renderPlot(plot_price_paths(shiny::req(dbrief()), isTRUE(input$db_anon)))
+  # the Price paths card's market picker; nothing picked (or nothing valid for
+  # this session) shows every market
+  paths_markets <- function(d) {
+    m <- intersect(suppressWarnings(as.integer(input$db_markets)), d$results$market_id)
+    if (length(m)) m else NULL
+  }
+  output$db_price <- shiny::renderPlot({
+    d <- shiny::req(dbrief())
+    plot_price_paths(d, isTRUE(input$db_anon), paths_markets(d))
+  })
   output$db_avg     <- shiny::renderPlot(plot_avg_price(shiny::req(dbrief())))
   output$db_profit  <- shiny::renderPlot(plot_profit_paths(shiny::req(dbrief()), isTRUE(input$db_anon)))
   output$db_br <- shiny::renderPlot({
@@ -261,7 +270,9 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
                        as.integer(input$br_round %||% min(d$results$round)),
                        input$br_firm %||% "Firm A")
   })
-  output$dl_price  <- gg_png(function() plot_price_paths(dbrief(), isTRUE(input$db_anon)))
+  output$dl_price  <- gg_png(function() {
+    d <- dbrief(); plot_price_paths(d, isTRUE(input$db_anon), paths_markets(d))
+  })
   output$dl_avg    <- gg_png(function() plot_avg_price(dbrief()), h = 4.5)
   output$dl_profit <- gg_png(function() plot_profit_paths(dbrief(), isTRUE(input$db_anon)))
   output$dl_br     <- gg_png(function() plot_best_response(dbrief(), br_market(),
@@ -350,7 +361,8 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
       return(shiny::tagList(nav, ad_history(ns, sl_list_sessions(con))))
     if (identical(view_rv(), "debrief"))
       return(shiny::tagList(nav, ad_debrief(ns, dbrief(), scored_sessions(),
-                                            debrief_sid(), flags())))
+                                            debrief_sid(), flags(),
+                                            shiny::isolate(input$db_markets))))
 
     body <- if (is.null(st)) ad_create(ns, game_choices)
       else switch(st$session$phase,
@@ -612,7 +624,7 @@ ad_finished <- function(ns, st) {
 
 # --- debrief -------------------------------------------------------------------
 
-ad_debrief <- function(ns, d, sessions, sid, fr) {
+ad_debrief <- function(ns, d, sessions, sid, fr, paths_markets = NULL) {
   if (nrow(sessions) == 0)
     return(shiny::div(class = "card", shiny::div(class = "card-body",
       "No finished games to debrief yet. Run one from the Run tab.")))
@@ -662,6 +674,16 @@ ad_debrief <- function(ns, d, sessions, sid, fr) {
       shiny::plotOutput(ns("db_br"), height = "380px"),
       shiny::downloadButton(ns("dl_br"), "PNG", class = "btn btn-sm btn-outline-secondary")))
 
+  # a re-render keeps the markets already picked, as far as this session has them
+  paths_card <- shiny::div(class = "card",
+    shiny::div(class = "card-header", "Price paths"),
+    shiny::div(class = "card-body",
+      shiny::selectizeInput(ns("db_markets"), "Markets to show", choices = markets,
+        selected = intersect(paths_markets, markets), multiple = TRUE,
+        options = list(placeholder = "All markets")),
+      shiny::plotOutput(ns("db_price"), height = "460px"),
+      shiny::downloadButton(ns("dl_price"), "PNG", class = "btn btn-sm btn-outline-secondary")))
+
   has_pred <- !is.null(d$predictions) && nrow(d$predictions) > 0
   pred_card <- if (has_pred) shiny::div(class = "card",
     shiny::div(class = "card-header", "Predictions vs. what happened"),
@@ -677,7 +699,7 @@ ad_debrief <- function(ns, d, sessions, sid, fr) {
       shiny::div(class = "card-header", "Teachable moments"),
       shiny::div(class = "card-body", shiny::tableOutput(ns("db_flags")))),
     pred_card,
-    fig_card("Price paths", "db_price", "dl_price", 460),
+    paths_card,
     fig_card("Average price per round", "db_avg", "dl_avg", 360),
     br_card,
     fig_card("Cumulative profit", "db_profit", "dl_profit", 460),

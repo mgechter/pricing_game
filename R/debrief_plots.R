@@ -19,20 +19,59 @@ PG_THEME <- function() {
   ln[is.finite(ln$y), , drop = FALSE]
 }
 
-plot_price_paths <- function(d, anon = FALSE) {
+# Dollar amounts print to the cent, as everywhere else in the app.
+.usd <- function(x) paste0("$", formatC(x, format = "f", digits = 2, big.mark = ","))
+
+FIRM_COLOURS <- c(`Firm A` = "#D55E00", `Firm B` = "#0072B2", Shadow = "#CC79A7")
+
+# One strip label per market, naming who is Firm A and who is Firm B (and the
+# shadow, if the market has one), so a panel reads as a pair without a legend
+# of every player in the game.
+.market_strips <- function(res, anon = FALSE) {
+  mk <- sort(unique(res$market_id))
+  lab <- vapply(mk, function(m) {
+    if (anon) return(sprintf("Market %s", m))
+    r  <- res[res$market_id == m, ]
+    nm <- function(f) {
+      v <- unique(r$display_name[r$firm_label == f])
+      if (length(v)) v[1] else NA_character_
+    }
+    out <- sprintf("Market %s: %s (A) vs %s (B)", m, nm("Firm A"), nm("Firm B"))
+    if (!is.na(nm("Shadow"))) out <- sprintf("%s, shadow %s", out, nm("Shadow"))
+    out
+  }, character(1))
+  stats::setNames(lab, mk)
+}
+
+# `markets`: market ids to draw (NULL = all). `ncol`: facet columns (NULL lets
+# ggplot choose).
+plot_price_paths <- function(d, anon = FALSE, markets = NULL, ncol = NULL) {
   res <- d$results
-  res$firm <- if (anon) res$firm_label else res$display_name
-  res$market <- paste("Market", res$market_id)
+  if (length(markets)) res <- res[res$market_id %in% markets, , drop = FALSE]
+  if (!nrow(res)) stop("none of those markets has results", call. = FALSE)
+  strips <- .market_strips(res, anon)
+  res$market <- factor(strips[as.character(res$market_id)], levels = strips)
+  res$firm   <- factor(res$firm_label, levels = names(FIRM_COLOURS))
   ln <- .benchmark_lines(d$benchmarks)
+  ln$text <- paste(ln$label, .usd(ln$y))
+  # wrap the strip to its panel's width, so three panels across don't clip it
+  cols <- ggplot2::wrap_dims(length(strips), ncol = ncol)[2]
+  wrap <- max(18, floor(96 / cols))
 
   ggplot(res, aes(round, price, colour = firm, group = firm)) +
     geom_hline(data = ln, aes(yintercept = y, linetype = label), colour = "grey45") +
+    geom_text(data = ln, aes(x = Inf, y = y, label = text), inherit.aes = FALSE,
+              hjust = 1.05, vjust = -0.45, size = 3, colour = "grey30") +
     geom_line(na.rm = TRUE) +
     geom_point(na.rm = TRUE, size = 1.8) +
-    facet_wrap(~ market) +
+    facet_wrap(~ market, ncol = ncol, labeller = label_wrap_gen(width = wrap)) +
+    scale_colour_manual(values = FIRM_COLOURS) +
+    scale_linetype_manual(values = c(NE = "dashed", Monopoly = "dotted",
+                                     Collusive = "dotdash"), guide = "none") +
     scale_x_continuous(breaks = function(l) seq(1, ceiling(max(l)), by = 1)) +
-    labs(x = "Round", y = "Price ($)", colour = NULL, linetype = "Benchmark",
-         title = sprintf("%s — price paths", d$game$label %||% "Game")) +
+    expand_limits(y = 0) +
+    labs(x = "Round", y = "Price ($)", colour = NULL,
+         title = sprintf("%s: price paths", d$game$label %||% "Game")) +
     PG_THEME()
 }
 

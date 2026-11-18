@@ -76,6 +76,10 @@ test_that("every admin and player screen renders across the game lifecycle", {
   d  <- dbf_load(con, sid)
   ss <- sl_list_sessions(con); ss <- ss[ss$n_result_rows > 0, ]
   renders(ad_debrief(ns, d, ss, sid, dbf_flags(d)))
+  # with markets picked on the Price paths card (999 is no market of this game)
+  mk <- sort(unique(d$results$market_id))
+  html <- as.character(ad_debrief(ns, d, ss, sid, dbf_flags(d), c(mk[1], 999)))
+  expect_match(html, "Markets to show", fixed = TRUE)
 })
 
 test_that("odd headcount: the shadow player still gets a round view", {

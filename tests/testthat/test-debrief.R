@@ -96,6 +96,35 @@ test_that("plot builders return ggplot objects; best-response guards bad input",
   expect_error(plot_best_response(d, 999, 2, "Firm A"), "isn't available")
 })
 
+test_that("price paths name each pair, label the benchmarks, and draw chosen markets", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "hotelling_low", GAMES_PATH)        # NE 50, monopoly 225
+  join(con, sid, c("Ada", "Boaz", "Cleo", "Dmitri", "Esme"))         # odd -> a shadow
+  sl_start_game(con, sid, seed = 1)
+  play_out(con, sid, function(r, f, p) 60 + r)
+  d   <- dbf_load(con, sid)
+  mks <- sort(unique(d$results$market_id))
+
+  p <- plot_price_paths(d)
+  strips <- levels(p$data$market)
+  expect_length(strips, length(mks))
+  expect_true(all(grepl("^Market \\d+: .+ \\(A\\) vs .+ \\(B\\)", strips)))
+  expect_equal(sum(grepl(", shadow ", strips)), 1)
+  expect_setequal(as.character(unique(p$data$firm)), c("Firm A", "Firm B", "Shadow"))
+  bench <- p$layers[[2]]$data$text
+  expect_true(all(c("NE $50.00", "Monopoly $225.00") %in% bench))
+
+  one <- plot_price_paths(d, markets = mks[2])
+  expect_equal(unique(one$data$market_id), mks[2])
+  expect_length(levels(one$data$market), 1)
+
+  anon <- plot_price_paths(d, anon = TRUE)
+  expect_true(all(grepl("^Market \\d+$", levels(anon$data$market))))
+  expect_false(any(grepl("Ada|Boaz|Cleo|Dmitri|Esme", levels(anon$data$market))))
+
+  expect_error(plot_price_paths(d, markets = 999), "none of those markets")
+})
+
 test_that("best-response explorer works in a market with a shadow player", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
