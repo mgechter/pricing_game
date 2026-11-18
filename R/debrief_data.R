@@ -148,9 +148,91 @@ dbf_flags <- function(d, top_n = 2L) {
         score = cas$len)
   }
 
+  # a firm whose rival priced above the monopoly price, or below the Nash price:
+  # the two cases where the best response says something students can check
+  ab   <- .ab_rows(d)
+  mono <- d$benchmarks$monopoly %||% NA_real_
+  rival_flag <- function(rows, gap, kind, where) {
+    if (!nrow(rows)) return(NULL)
+    rows$score <- gap
+    rows <- slice_max(rows, score, n = top_n, with_ties = FALSE)
+    br <- vapply(rows$rival_price,
+                 function(pr) best_response(d$model, d$params, pr)$price, numeric(1))
+    data.frame(kind = kind, market_id = rows$market_id, round = rows$round,
+      firm_label = rows$firm_label, who = rows$display_name,
+      detail = sprintf("%s's rival priced $%s, %s. %s priced $%s against a best response of $%s",
+                       rows$display_name, m2(rows$rival_price), where,
+                       rows$display_name, m2(rows$price), m2(br)),
+      score = rows$score)
+  }
+  if (nrow(ab) && is.finite(mono)) {
+    hi <- ab[ab$rival_price > mono + 1e-6, , drop = FALSE]
+    out$above <- rival_flag(hi, hi$rival_price - mono, "Rival above monopoly",
+                            sprintf("above the monopoly price ($%s)", m2(mono)))
+  }
+  if (nrow(ab) && is.finite(ne)) {
+    lo <- ab[ab$rival_price < ne - 1e-6, , drop = FALSE]
+    out$below <- rival_flag(lo, ne - lo$rival_price, "Rival below NE",
+                            sprintf("below the Nash price ($%s)", m2(ne)))
+  }
+
   res_df <- if (length(out)) do.call(rbind, out) else .flags_empty()
   res_df$rationale <- .flag_rationale(res_df, d$submissions)
   res_df[order(-res_df$score), , drop = FALSE]
+}
+
+# Firm A / Firm B rows that priced against a real rival: shadows (scored against
+# a paired student's prices) and no-shows are left out.
+.ab_rows <- function(d) {
+  res <- d$results
+  nos <- res$no_submission %||% rep(0, nrow(res))
+  keep <- res$firm_label %in% c("Firm A", "Firm B") & is.finite(res$price) &
+          is.finite(res$rival_price) & (is.na(nos) | nos == 0)
+  res[keep, , drop = FALSE]
+}
+
+# The firm-round whose rival priced furthest above the monopoly price
+# ("above_monopoly") or furthest below the Nash price ("below_ne"). When no
+# rival did, the nearest case (the highest or lowest rival price), with
+# exact = FALSE so a caption can say so. NULL when nothing was scored.
+dbf_rival_case <- function(d, kind = c("above_monopoly", "below_ne")) {
+  kind <- match.arg(kind)
+  ab <- .ab_rows(d)
+  b  <- d$benchmarks
+  ref <- if (kind == "above_monopoly") b$monopoly %||% NA_real_ else b$ne %||% NA_real_
+  if (!nrow(ab) || !is.finite(ref)) return(NULL)
+  gap <- if (kind == "above_monopoly") ab$rival_price - ref else ref - ab$rival_price
+  i <- order(-gap, ab$round, ab$market_id, ab$firm_label)[1]
+  list(market_id = ab$market_id[i], round = ab$round[i], firm_label = ab$firm_label[i],
+       price = ab$price[i], rival_price = ab$rival_price[i], exact = gap[i] > 1e-6)
+}
+
+# Markets where a firm cut its price in the last round played, biggest cut
+# first: exact = TRUE where both firms priced above the Nash price the round
+# before and the cut is positive (the end-of-game undercut), then the other
+# markets by the size of their cut. At most `n` rows; none for a one-round game.
+dbf_last_round_cuts <- function(d, n = 2L) {
+  empty <- data.frame(market_id = integer(0), cut = numeric(0), exact = logical(0))
+  ab <- d$results[d$results$firm_label %in% c("Firm A", "Firm B"), , drop = FALSE]
+  if (!nrow(ab)) return(empty)
+  last <- max(ab$round)
+  if (last < 2) return(empty)
+  ne <- d$benchmarks$ne %||% 0
+  rows <- lapply(split(ab, ab$market_id), function(m) {
+    prev <- m$price[m$round == last - 1]; now <- m$price[m$round == last]
+    firm_prev <- m$firm_label[m$round == last - 1]; firm_now <- m$firm_label[m$round == last]
+    if (length(prev) != 2 || length(now) != 2) return(NULL)
+    drop <- prev[order(firm_prev)] - now[order(firm_now)]
+    if (!any(is.finite(drop))) return(NULL)
+    data.frame(market_id = m$market_id[1], cut = max(drop, na.rm = TRUE),
+               held = all(is.finite(prev)) && all(prev > ne))
+  })
+  df <- do.call(rbind, rows)
+  if (is.null(df) || !nrow(df)) return(empty)
+  df$exact <- df$held & df$cut > 0
+  df <- df[order(!df$exact, -df$cut, df$market_id), c("market_id", "cut", "exact")]
+  rownames(df) <- NULL
+  utils::head(df, n)
 }
 
 # The student's own "why this price?" note for a flagged (player, round), where

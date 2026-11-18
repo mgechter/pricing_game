@@ -36,6 +36,68 @@ test_that("dbf_flags catches tacit collusion and an off-best-response move", {
   expect_true("rationale" %in% names(fr))
 })
 
+test_that("a rival above monopoly or below NE is flagged and found", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)               # NE 0, monopoly 50
+  join(con, sid, c("A", "B")); sl_start_game(con, sid, seed = 1)
+  play_out(con, sid, function(r, f, p) if (f == "Firm A") 46.4 else 52.1 + r)
+  d  <- dbf_load(con, sid)
+  fr <- dbf_flags(d)
+  hi <- fr[fr$kind == "Rival above monopoly", ]
+  expect_equal(nrow(hi), 2)                               # top_n of four rounds
+  expect_true(all(hi$firm_label == "Firm A"))
+  expect_equal(sort(hi$round), c(3, 4))                   # Firm B's two highest prices
+  expect_match(hi$detail[1], "best response of $50.00", fixed = TRUE)
+  expect_false("Rival below NE" %in% fr$kind)
+
+  above <- dbf_rival_case(d, "above_monopoly")
+  expect_true(above$exact)
+  expect_equal(above$firm_label, "Firm A"); expect_equal(above$round, 4)
+  expect_equal(above$rival_price, 56.1)
+  below <- dbf_rival_case(d, "below_ne")                  # no price below 0: nearest case
+  expect_false(below$exact)
+  expect_equal(below$rival_price, 46.4); expect_equal(below$firm_label, "Firm B")
+
+  con2 <- fresh_db()
+  sid2 <- sl_create_session(con2, "hotelling_high", GAMES_PATH)       # NE 100
+  join(con2, sid2, c("A", "B")); sl_start_game(con2, sid2, seed = 1)
+  play_out(con2, sid2, function(r, f, p) if (f == "Firm A") 90 else 120)
+  d2 <- dbf_load(con2, sid2)
+  lo <- dbf_flags(d2); lo <- lo[lo$kind == "Rival below NE", ]
+  expect_true(nrow(lo) >= 1); expect_true(all(lo$firm_label == "Firm B"))
+  expect_true(dbf_rival_case(d2, "below_ne")$exact)
+  # the Figure pack draws the new flags' firm-rounds too
+  files <- debrief_write_figs(d2, tempfile("figs_"))
+  expect_true(any(grepl(sprintf("_r%d_B\\.png$", lo$round[1]), files)))
+})
+
+test_that("dbf_last_round_cuts finds the end-of-game undercuts, biggest first", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "hotelling_low", GAMES_PATH)          # NE 50
+  ids <- join(con, sid, sprintf("P%d", 1:8)); sl_start_game(con, sid, seed = 4)
+  nr  <- sl_session(con, sid)$n_rounds
+  # everyone holds $200; in the last round each player cuts by 10 x their index
+  play_out(con, sid, function(r, f, p) if (r < nr) 200 else 200 - 10 * match(p, ids))
+  d <- dbf_load(con, sid)
+  res <- d$results[d$results$firm_label %in% c("Firm A", "Firm B"), ]
+  want <- vapply(split(res, res$market_id), function(m)
+    max(m$price[m$round == nr - 1]) - min(m$price[m$round == nr]), numeric(1))
+  got <- dbf_last_round_cuts(d, 2)
+  expect_equal(nrow(got), 2)
+  expect_true(all(got$exact))
+  expect_equal(got$market_id, as.integer(names(sort(want, decreasing = TRUE))[1:2]))
+  expect_equal(got$cut, unname(sort(want, decreasing = TRUE)[1:2]))
+
+  # a game ended after round 1 has no last-round cut to show
+  con1 <- fresh_db()
+  s1 <- sl_create_session(con1, "hotelling_low", GAMES_PATH)
+  join(con1, s1, sprintf("P%d", 1:4)); sl_start_game(con1, s1, seed = 1)
+  pl <- sl_players(con1, s1); pl <- pl[!is.na(pl$market_id), ]
+  for (pid in pl$player_id) sl_submit(con1, s1, pid, 1, 120)
+  sl_score_round(con1, s1); sl_end_early(con1, s1)
+  expect_equal(nrow(dbf_last_round_cuts(dbf_load(con1, s1))), 0)
+})
+
 test_that("dbf_flags carries each flagged firm's own rationale", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
