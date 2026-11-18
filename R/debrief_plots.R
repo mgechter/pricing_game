@@ -91,7 +91,8 @@ QUARTILE_COLOURS <- c(`75th percentile` = "#E69F00", Median = "black",
 # 75th percentile of every price scored that round.
 plot_price_quartiles <- function(d) {
   res <- d$results[is.finite(d$results$price), , drop = FALSE]
-  if (!nrow(res)) stop("no scored prices yet", call. = FALSE)
+  if (!nrow(res))
+    return(.message_plot(d$game$label %||% "Game", "No prices have been scored yet."))
   rounds <- sort(unique(res$round))
   qs <- do.call(rbind, lapply(rounds, function(r) {
     p <- stats::quantile(res$price[res$round == r], c(0.75, 0.5, 0.25), names = FALSE)
@@ -145,9 +146,19 @@ plot_market_detail <- function(d, market_id, anon = FALSE) {
     PG_THEME()
 }
 
+# A chart-sized message for when there is nothing to draw, so a render, a
+# download or the projector shows a sentence rather than an R error.
+.message_plot <- function(title, msg)
+  ggplot() +
+    annotate("text", x = 0, y = 0, label = msg, size = 5, colour = "grey30") +
+    labs(title = title) +
+    theme_void() + theme(plot.title = element_text(face = "bold"))
+
 plot_avg_price <- function(d) {
   # from results (scored rounds only) so it never shows a half-formed round
   res <- d$results[!is.na(d$results$price), ]
+  if (!nrow(res))
+    return(.message_plot("Average price per round", "No prices have been scored yet."))
   ap  <- aggregate(price ~ round, res, mean)
   ln  <- .benchmark_lines(d$benchmarks)
 
@@ -342,11 +353,14 @@ debrief_write_figs <- function(d, dir, width = 9, height = 5.5, dpi = 200) {
     save("price_quartiles",   plot_price_quartiles(d), w = 8, h = 4.5),
     save("cumulative_profit", plot_profit_paths(d))
   )
-  # every market's prices and profits, named by its rank in joint profit
+  # every market's prices and profits, named by its rank in joint profit; a
+  # figure that can't be drawn is left out rather than failing the whole pack
   rk <- dbf_market_ranks(d)
   for (i in seq_len(nrow(rk)))
-    files <- c(files, save(sprintf("market_rank%d_m%s", rk$rank[i], rk$market_id[i]),
-                           plot_market_detail(d, rk$market_id[i]), w = 11, h = 4.5))
+    files <- c(files, tryCatch(
+      save(sprintf("market_rank%d_m%s", rk$rank[i], rk$market_id[i]),
+           plot_market_detail(d, rk$market_id[i]), w = 11, h = 4.5),
+      error = function(e) character(0)))
   flags <- dbf_flags(d)
   flags <- flags[flags$firm_label %in% c("Firm A", "Firm B"), , drop = FALSE]
   # one PNG per (market, round, firm): two flags on the same firm-round draw the

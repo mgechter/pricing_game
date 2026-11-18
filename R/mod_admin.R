@@ -205,7 +205,6 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     content  = function(file) write_bundle_xlsx(sl_export_bundle(con, bundle_ids()), file))
 
   # ---- debrief ----------------------------------------------------------------
-  shiny::observeEvent(input$nav_debrief, view_rv("debrief"))
   shiny::observeEvent(input$nav_figures, view_rv("figures"))      # ECON 30303
   slide_figs <- slide_figures_server(input, output, con, view_rv)
   debrief_sid <- shiny::reactiveVal(NULL)
@@ -224,6 +223,17 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
   })
   shiny::observeEvent(input$debrief_pick, debrief_sid(as.integer(input$debrief_pick)))
   shiny::observeEvent(input$debrief_refresh, dbf_tick(dbf_tick() + 1))
+  # Debrief reloads on every visit: a reset and replay, a re-score or a deleted
+  # session since the last visit changes what the chosen session holds
+  shiny::observeEvent(input$nav_debrief, {
+    view_rv("debrief")
+    s <- scored_sessions()
+    if (!is.null(debrief_sid()) && !(debrief_sid() %in% s$session_id))
+      debrief_sid(if (nrow(s)) s$session_id[1] else NULL)
+    dbf_tick(dbf_tick() + 1)
+  })
+  # the tables follow "Show as Firm A / B" as the charts do
+  dshow <- function(d) if (isTRUE(input$db_anon)) dbf_anonymize(d) else d
 
   dbrief <- shiny::reactive({
     dbf_tick(); sid <- debrief_sid(); if (is.null(sid)) return(NULL)
@@ -281,12 +291,18 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     d <- dbrief(); plot_market_detail(d, detail_market(d), isTRUE(input$db_anon))
   }, w = 11, h = 4.5)
   output$db_profit  <- shiny::renderPlot(plot_profit_paths(shiny::req(dbrief()), isTRUE(input$db_anon)))
-  # the explorer's figure: one firm, or both firms of the market stacked
+  # the explorer's figure: one firm, or both firms of the market stacked; a
+  # market and round where a firm has no price (a no-show) gets a sentence
+  # saying so instead of an error, on screen and in the download
   br_plot <- function(d, round) {
     firm <- input$br_firm %||% "Firm A"
-    if (identical(firm, "Both firms"))
-      plot_best_response_pair(d, br_market(), round, anon = isTRUE(input$db_anon))
-    else plot_best_response(d, br_market(), round, firm, anon = isTRUE(input$db_anon))
+    tryCatch(
+      if (identical(firm, "Both firms"))
+        plot_best_response_pair(d, br_market(), round, anon = isTRUE(input$db_anon))
+      else plot_best_response(d, br_market(), round, firm, anon = isTRUE(input$db_anon)),
+      error = function(e) .message_plot("Best-response explorer", paste0(
+        sprintf("No figure for market %s, round %s:\n", br_market(), round),
+        "a firm there has no price that round (a no-show).")))
   }
   br_both <- function() identical(input$br_firm, "Both firms")
   output$db_br <- shiny::renderPlot({
@@ -307,7 +323,8 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     })
 
   output$db_flags   <- shiny::renderTable(
-    { fr <- flags(); if (is.null(fr) || !nrow(fr)) return(NULL)
+    { fr <- if (isTRUE(input$db_anon)) dbf_flags(dshow(shiny::req(dbrief()))) else flags()
+      if (is.null(fr) || !nrow(fr)) return(NULL)
       data.frame(Flag = fr$kind, Market = fr$market_id, Round = fr$round,
                  What = fr$detail,
                  `Why they said` = ifelse(nzchar(fr$rationale %||% ""),
@@ -316,7 +333,7 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     striped = TRUE, width = "100%")
   signed <- function(x) sprintf("%s%s", if (x >= 0) "+" else "-", money2(abs(x)))
   output$db_lb_indiv <- shiny::renderTable({
-    d <- shiny::req(dbrief()); lb <- dbf_leaderboards(d)$individuals
+    d <- dshow(shiny::req(dbrief())); lb <- dbf_leaderboards(d)$individuals
     data.frame(Player = lb$display_name, Market = lb$market_id, Firm = lb$firm_label,
                `Total profit` = vapply(lb$total_profit, money2, ""),
                `vs. all-NE`        = vapply(lb$vs_ne, signed, ""),
@@ -324,7 +341,7 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
                check.names = FALSE)
   }, striped = TRUE, width = "100%")
   output$db_lb_mkt <- shiny::renderTable({
-    d <- shiny::req(dbrief()); lb <- dbf_leaderboards(d)$markets
+    d <- dshow(shiny::req(dbrief())); lb <- dbf_leaderboards(d)$markets
     data.frame(Market = lb$market_id, `Firm A` = lb$`Firm A`, `Firm B` = lb$`Firm B`,
                `Market profit` = vapply(lb$market_profit, money2, ""), check.names = FALSE)
   }, striped = TRUE, width = "100%")
@@ -335,7 +352,7 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     plot_predictions_grid(items)
   })
   output$db_pred_table <- shiny::renderTable({
-    d <- shiny::req(dbrief()); dbf_prediction_table(d)
+    d <- dshow(shiny::req(dbrief())); dbf_prediction_table(d)
   }, striped = TRUE, width = "100%", na = "—")
   output$dl_pred <- gg_png(function() plot_predictions_grid(dbf_predictions(dbrief())), h = 7)
 
@@ -398,7 +415,8 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
       return(shiny::tagList(nav, ad_debrief(ns, dbrief(), scored_sessions(),
                                             debrief_sid(), flags(),
                                             shiny::isolate(input$db_markets),
-                                            shiny::isolate(input$db_detail_market))))
+                                            shiny::isolate(input$db_detail_market),
+                                            shiny::isolate(input$db_anon))))
 
     body <- if (is.null(st)) ad_create(ns, game_choices)
       else switch(st$session$phase,
@@ -661,7 +679,8 @@ ad_finished <- function(ns, st) {
 
 # --- debrief -------------------------------------------------------------------
 
-ad_debrief <- function(ns, d, sessions, sid, fr, paths_markets = NULL, detail_market = NULL) {
+ad_debrief <- function(ns, d, sessions, sid, fr, paths_markets = NULL, detail_market = NULL,
+                       anon = NULL) {
   if (nrow(sessions) == 0)
     return(shiny::div(class = "card", shiny::div(class = "card-body",
       "No finished games to debrief yet. Run one from the Run tab.")))
@@ -673,9 +692,12 @@ ad_debrief <- function(ns, d, sessions, sid, fr, paths_markets = NULL, detail_ma
     shiny::fluidRow(
       shiny::column(6, shiny::selectInput(ns("debrief_pick"), "Session",
         choices = choices, selected = sid)),
+      # the instructor's current choice survives a redraw (Refresh, another
+      # session picked); the session's own setting only sets the first value
       shiny::column(3, shiny::checkboxInput(ns("db_anon"),
         "Show as Firm A / B",
-        value = !is.null(d) && isTRUE((d$session$anonymous %||% 0) == 1))),
+        value = if (!is.null(anon)) isTRUE(anon)
+                else !is.null(d) && isTRUE((d$session$anonymous %||% 0) == 1))),
       shiny::column(3, shiny::div(style = "margin-top:1.6rem;",
         shiny::actionButton(ns("debrief_refresh"), "Refresh", class = "btn btn-sm btn-outline-secondary"), " ",
         shiny::downloadButton(ns("dl_figpack"), "Figure pack (ZIP)", class = "btn btn-sm btn-outline-primary"))))))

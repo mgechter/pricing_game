@@ -141,3 +141,124 @@ test_that("C5: the round-one timer must work after an early end and a reset", {
     expect_equal(sl_session(con, csid)$phase, "scored")
   })
 })
+
+# --- the Debrief tab ------------------------------------------------------------
+
+test_that("C6: the Debrief market leaderboard must exclude shadow profit", {
+  con <- fresh_db(); csid <- .cx_start(con, n = 3)
+  .cx_score(con, csid); sl_end_early(con, csid)
+  d <- dbf_load(con, csid)
+  # At a Bertrand $20 tie, A and B earn $800 each; the shadow earns another
+  # $800 in its separate counterfactual market, which must not count here.
+  expect_equal(dbf_leaderboards(d)$markets$market_profit, 1600)
+})
+
+test_that("C7: the displayed Bertrand best-response price must beat a feasible cent undercut", {
+  con <- fresh_db(); csid <- .cx_start(con)
+  .cx_score(con, csid); sl_end_early(con, csid)
+  d <- dbf_load(con, csid)
+  p <- plot_best_response(d, 1, 1, "Firm A")
+  marks <- p$layers[[4]]$data
+  label <- marks$text[marks$kind == "Best response"]
+  shown <- as.numeric(sub("Best response \\$", "", label))
+  # The labelled $20.00 earned $800; $19.99 earns $1,599.3999.
+  expect_gte(own_profit(d$model, d$params, shown, 20),
+             own_profit(d$model, d$params, 19.99, 20))
+  expect_equal(label, "Best response $19.99")
+  fr <- dbf_flags(d)
+  expect_false(any(grepl("best response of $20.00", fr$detail, fixed = TRUE)))
+})
+
+test_that("C7: the Bertrand best response is the monopoly price above it, a tie at a cent, cost at cost", {
+  p <- list(choke = 100, mc = 0)
+  br <- function(r) best_response("bertrand_homogeneous", p, r)$price
+  expect_equal(br(52.10), 50)          # rival above the monopoly price
+  expect_equal(br(50), 49.99)          # at it: a cent under
+  expect_equal(br(0.01), 0.01)         # a tie at a cent beats $0 at cost
+  expect_equal(br(0), 0)               # rival at cost: nothing to gain
+  expect_equal(resolve_benchmarks(get_game("bertrand", GAMES_PATH))$benchmarks$ne, 0)
+})
+
+test_that("C8: a scored all-no-show game must still allow a Debrief figure-pack download", {
+  con <- fresh_db(); csid <- .cx_start(con)
+  sl_score_round(con, csid); sl_end_early(con, csid)
+  dir <- tempfile("codex_empty_pack_")
+  withr::defer(unlink(dir, recursive = TRUE))
+  expect_error(suppressMessages(debrief_write_figs(dbf_load(con, csid), dir, dpi = 30)), NA)
+  # the projector's average-price chart draws a sentence, not an error
+  expect_s3_class(ggplot2::ggplot_build(plot_avg_price(dbf_load(con, csid))), "ggplot_built")
+})
+
+test_that("C9: reopening Debrief after reset and replay must use the replay's results", {
+  con <- fresh_db(); csid <- .cx_start(con)
+  .cx_score(con, csid, 20); sl_end_early(con, csid)
+  suppressMessages(shiny::testServer(admin_server,
+    args = list(con = con, games_path = GAMES_PATH), {
+      session$setInputs(nav_debrief = 1)
+      original <- dbrief()$results
+      session$setInputs(nav_run = 1, reset_ok = 1)
+      session$elapse(1100)
+      sl_start_game(con, csid, seed = 1)
+      .cx_score(con, csid, 40); sl_end_early(con, csid)
+      session$elapse(1100)
+      session$setInputs(nav_debrief = 2)
+      expect_equal(dbrief()$results$price, dbf_load(con, csid)$results$price)
+    }))
+})
+
+test_that("C10: Both firms in the Debrief explorer must handle a market with one no-show", {
+  con <- fresh_db(); csid <- .cx_start(con, "hotelling_low")
+  .cx_score(con, csid, function(p, r) if (p$firm_label == "Firm A") 80 else NA_real_)
+  sl_end_early(con, csid)
+  suppressMessages(shiny::testServer(admin_server,
+    args = list(con = con, games_path = GAMES_PATH), {
+      session$setInputs(nav_debrief = 1, br_firm = "Both firms", br_round = 1, br_market = 1)
+      # A Shiny validation/no-data message is acceptable; an ordinary render
+      # error is not. Test the actual renderPlot, not only its plot builder.
+      expect_error(tryCatch(output$db_br, error = function(e) {
+        if (inherits(e, "shiny.silent.error")) NULL else stop(e)
+      }), NA)
+      # the firm whose rival did not submit, on its own
+      session$setInputs(br_firm = "Firm A")
+      expect_error(output$db_br, NA)
+    }))
+})
+
+test_that("C11: Refresh must preserve the Debrief's Show as Firm A / B choice", {
+  con <- fresh_db(); csid <- .cx_start(con)
+  play_out(con, csid, 20)
+  shiny::testServer(admin_server, args = list(con = con, games_path = GAMES_PATH), {
+    session$setInputs(nav_debrief = 1, db_anon = TRUE)
+    session$setInputs(debrief_refresh = 1)
+    html <- output$screen$html
+    checkbox <- regmatches(html, regexpr('<input[^>]*db_anon[^>]*>', html))
+    expect_match(checkbox, "checked")
+  })
+})
+
+test_that("C12: in-progress profit comparisons must use the number of scored rounds", {
+  con <- fresh_db(); csid <- .cx_start(con, "hotelling_high")
+  .cx_score(con, csid, 100); sl_advance_round(con, csid)
+  # Round 2 is open. Both firms played NE in the only round that has a result.
+  expect_equal(dbf_leaderboards(dbf_load(con, csid))$individuals$vs_ne, c(0, 0))
+})
+
+test_that("C13: an unchanged equilibrium path must not be flagged as a profit swing", {
+  con <- fresh_db(); csid <- .cx_start(con, "hotelling_high")
+  play_out(con, csid, 100)
+  flags <- dbf_flags(dbf_load(con, csid))
+  expect_false(any(flags$kind == "Profit swing"))
+})
+
+test_that("C16: Show as Firm A / B must hide names in the Debrief tables as well as plots", {
+  con <- fresh_db(); csid <- .cx_start(con)
+  play_out(con, csid, 20)
+  shiny::testServer(admin_server, args = list(con = con, games_path = GAMES_PATH), {
+    session$setInputs(nav_debrief = 1, db_anon = TRUE)
+    displayed <- paste(output$db_flags, output$db_lb_indiv, output$db_lb_mkt)
+    expect_false(grepl("Student 1", displayed, fixed = TRUE))
+    expect_match(displayed, "Market 1, Firm A", fixed = TRUE)
+    session$setInputs(db_anon = FALSE)
+    expect_match(paste(output$db_lb_indiv), "Student 1", fixed = TRUE)
+  })
+})

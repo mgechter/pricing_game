@@ -69,6 +69,27 @@ dbf_load_bundle <- function(dir, session_id = NULL) {
     results = res, submissions = sub, predictions = prd)
 }
 
+# The same data with every student's name replaced by their market and firm
+# ("Market 2, Firm A"), for the Debrief tab's tables when names are hidden.
+dbf_anonymize <- function(d) {
+  lab <- function(m, f) ifelse(is.na(m), "(no market)", sprintf("Market %s, %s", m, f))
+  if (!is.null(d$results) && nrow(d$results))
+    d$results$display_name <- lab(d$results$market_id, d$results$firm_label)
+  if (!is.null(d$submissions) && nrow(d$submissions))
+    d$submissions$display_name <- lab(d$submissions$market_id, d$submissions$firm_label)
+  if (!is.null(d$players) && nrow(d$players)) {
+    old <- d$players$display_name
+    d$players$display_name <- lab(d$players$market_id, d$players$firm_label)
+    if (!is.null(d$predictions) && nrow(d$predictions)) {
+      i <- if (all(c("player_id") %in% names(d$predictions)) && "player_id" %in% names(d$players))
+             match(d$predictions$player_id, d$players$player_id)
+           else match(d$predictions$display_name, old)
+      d$predictions$display_name <- d$players$display_name[i]
+    }
+  }
+  d
+}
+
 # --- teachable moments ---------------------------------------------------------
 
 .flags_cols <- c("kind", "market_id", "round", "firm_label", "who", "detail",
@@ -101,7 +122,7 @@ dbf_flags <- function(d, top_n = 2L) {
     group_by(player_id) |>
     mutate(dp = profit - lag(profit)) |>
     ungroup() |>
-    filter(!is.na(dp)) |>
+    filter(!is.na(dp), abs(dp) >= 0.005) |>            # an unchanged profit is no swing
     mutate(score = abs(dp))
   if (nrow(swing)) {
     swing <- slice_max(swing, score, n = top_n, with_ties = FALSE)
@@ -328,7 +349,9 @@ dbf_prediction_table <- function(d) {
 
 dbf_leaderboards <- function(d) {
   res <- d$results
-  nr  <- d$session$n_rounds %||% max(res$round, 0)
+  # the rounds scored so far: a game still running (or ended early) is compared
+  # with the benchmark over the rounds actually played, not the full horizon
+  nr  <- length(unique(res$round))
   ne  <- d$benchmarks$ne %||% 0
   coll <- d$benchmarks$collusive %||% d$benchmarks$monopoly %||% ne
   ne_pr   <- own_profit(d$model, d$params, ne, ne)        # symmetric per-round NE profit
@@ -341,7 +364,10 @@ dbf_leaderboards <- function(d) {
            vs_collusive = total_profit - nr * coll_pr) |>
     arrange(desc(total_profit))
 
+  # a market's profit is its two firms'; a shadow is scored in a market of its
+  # own against the host's prices, so its profit is not this market's
   markets <- res |>
+    filter(firm_label %in% c("Firm A", "Firm B")) |>
     group_by(market_id) |>
     summarise(market_profit = sum(profit), .groups = "drop") |>
     left_join(

@@ -98,6 +98,22 @@ best_response <- function(model, params, rival_price, grid = NULL, by = NULL,
   best   <- grid[which.max(profit)]
   bprof  <- max(profit)
 
+  if (identical(model, "bertrand_homogeneous")) {
+    # Bertrand profit jumps at the rival's price, so a grid lands a hair below
+    # it and a label rounds that to the rival's own price, where a tie earns
+    # half. Prices are set in whole cents (`tick`), so the best reply is one of:
+    # marginal cost, a cent under the rival, a tie at the rival's price, or the
+    # monopoly price. The grid curve is kept for plotting.
+    tick <- params$tick %||% 0.01
+    mc   <- params$mc %||% 0
+    cand <- c(mc, round(rival_price - tick, 8), rival_price, monopoly_price(model, params))
+    cand <- unique(cand[is.finite(cand) & cand >= mc])
+    pr   <- own_profit(model, params, cand, rival_price)
+    i    <- which.max(pr)
+    return(list(price = cand[i], profit = pr[i],
+                curve = data.frame(price = grid, profit = profit)))
+  }
+
   if (is.null(by) && length(grid) > 2) {                 # local refine
     step <- grid[2] - grid[1]
     fine <- seq(max(rng[["lo"]], best - step),
