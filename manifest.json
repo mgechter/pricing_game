@@ -2497,7 +2497,7 @@
       "checksum": "eafe4e24e2d5f38213f98ec332933795"
     },
     "R/db.R": {
-      "checksum": "2ab76df08e1e957864b9aedbe68a44aa"
+      "checksum": "817b50fe08ffd3a5f40ae94f075c34af"
     },
     "R/debrief_data.R": {
       "checksum": "22d6578b0f106f3326fdc8f066d1b183"
@@ -2530,7 +2530,7 @@
       "checksum": "010afafb87bdd903b7723640fcb1dad2"
     },
     "R/mod_admin.R": {
-      "checksum": "de67b8643586c3e74de7c7ee5e05a81c"
+      "checksum": "2615645fd2db29264eef4c86a90c2d4a"
     },
     "R/mod_display.R": {
       "checksum": "cce16588fdb9cd5e67f2ce3c9b938e30"
@@ -2542,7 +2542,7 @@
       "checksum": "2c1382048b736b862c4f4f27b06f561c"
     },
     "R/session_logic.R": {
-      "checksum": "7cc85d7d9c49913eae26f7159b533aff"
+      "checksum": "3d7e5c512b3a097fe7b02fb8e9e9331d"
     },
     "R/ui_helpers.R": {
       "checksum": "6efb9eccc58a3ad4ce2e0e6603698120"
@@ -2593,7 +2593,7 @@
       "checksum": "96f3f6a62352f340b8cb57882b41fd48"
     },
     "tests/testthat/test-session-logic.R": {
-      "checksum": "bead07431d477a7c5676ca24d0da412e"
+      "checksum": "1f18ed07998f73ff255acb12be3cea1c"
     },
     "tests/testthat/test-ui-screens.R": {
       "checksum": "0bafbd88d8d142722c9fdbecf079b64a"
