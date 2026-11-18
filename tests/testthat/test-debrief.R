@@ -234,6 +234,43 @@ test_that("both firms of a market stack in one figure, chosen firm on top", {
   expect_error(plot_best_response_pair(d, 999, 2), "isn't available")
 })
 
+test_that("price quartiles by round, and one market's prices and profits ranked by joint profit", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "hotelling_high", GAMES_PATH)         # NE 100, monopoly 200
+  ids <- join(con, sid, c("Ada", "Boaz", "Cleo", "Dmitri", "Esme"))  # odd -> a shadow
+  sl_start_game(con, sid, seed = 3)
+  play_out(con, sid, function(r, f, p) 80 + 10 * match(p, ids) + r)
+  d <- dbf_load(con, sid)
+
+  q <- plot_price_quartiles(d)
+  r3 <- d$results$price[d$results$round == 3 & is.finite(d$results$price)]
+  got <- q$data[q$data$round == 3, ]
+  expect_equal(got$price[got$stat == "Median"], stats::median(r3))
+  expect_equal(got$price[got$stat == "25th percentile"], unname(stats::quantile(r3, 0.25)))
+  expect_equal(nrow(q$data), 3 * length(unique(d$results$round)))
+  expect_true(all(c("NE $100.00", "Monopoly $200.00") %in% layer_text(q)))
+
+  rk  <- dbf_market_ranks(d)
+  ab  <- d$results[d$results$firm_label %in% c("Firm A", "Firm B"), ]
+  want <- sort(tapply(ab$profit, ab$market_id, sum), decreasing = TRUE)
+  expect_equal(rk$market_id, as.integer(names(want)))
+  expect_equal(rk$joint_profit, unname(as.numeric(want)))
+  expect_equal(rk$rank, seq_len(nrow(rk)))
+
+  top <- rk$market_id[1]
+  m <- plot_market_detail(d, top)
+  expect_setequal(levels(m$data$measure), c("Price ($)", "Round profit ($)"))
+  expect_match(plot_lab(m, "title"), sprintf("^Market %d: .+ \\(A\\) vs .+ \\(B\\)", top))
+  expect_match(plot_lab(m, "subtitle"), sprintf("^Rank 1 of %d markets", nrow(rk)))
+  expect_match(plot_lab(plot_market_detail(d, top, anon = TRUE), "title"), sprintf("^Market %d$", top))
+  expect_error(plot_market_detail(d, 999), "isn't available")
+
+  files <- debrief_write_figs(d, tempfile("figs_"))
+  expect_true(any(grepl("price_quartiles\\.png$", files)))
+  expect_equal(sum(grepl("^market_rank\\d+_m\\d+\\.png$", basename(files))), nrow(rk))
+  expect_true(all(file.exists(files)))
+})
+
 test_that("best-response explorer works in a market with a shadow player", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)

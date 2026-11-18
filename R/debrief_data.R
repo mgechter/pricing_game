@@ -235,6 +235,20 @@ dbf_last_round_cuts <- function(d, n = 2L) {
   utils::head(df, n)
 }
 
+# Markets ranked by the two firms' total profit over the game, highest first
+# (a shadow's profit, scored against its host's prices, is left out).
+dbf_market_ranks <- function(d) {
+  res <- d$results[d$results$firm_label %in% c("Firm A", "Firm B"), , drop = FALSE]
+  if (!nrow(res))
+    return(data.frame(market_id = integer(0), joint_profit = numeric(0), rank = integer(0)))
+  tot <- tapply(res$profit, res$market_id, sum, na.rm = TRUE)
+  df  <- data.frame(market_id = as.integer(names(tot)), joint_profit = as.numeric(tot))
+  df  <- df[order(-df$joint_profit, df$market_id), , drop = FALSE]
+  df$rank <- seq_len(nrow(df))
+  rownames(df) <- NULL
+  df
+}
+
 # The student's own "why this price?" note for a flagged (player, round), where
 # the flag names one firm; blank for the market-level flags ("both firms").
 .flag_rationale <- function(fr, subs) {

@@ -265,6 +265,21 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     plot_price_paths(d, isTRUE(input$db_anon), paths_markets(d))
   })
   output$db_avg     <- shiny::renderPlot(plot_avg_price(shiny::req(dbrief())))
+  output$db_quart   <- shiny::renderPlot(plot_price_quartiles(shiny::req(dbrief())))
+  output$dl_quart   <- gg_png(function() plot_price_quartiles(dbrief()), h = 4.5)
+  # the "One market" card: the picked market, else the top one by joint profit
+  detail_market <- function(d) {
+    m <- suppressWarnings(as.integer(input$db_detail_market))
+    if (length(m) && !is.na(m) && m %in% d$results$market_id) m
+    else dbf_market_ranks(d)$market_id[1]
+  }
+  output$db_detail <- shiny::renderPlot({
+    d <- shiny::req(dbrief())
+    plot_market_detail(d, detail_market(d), isTRUE(input$db_anon))
+  })
+  output$dl_detail <- gg_png(function() {
+    d <- dbrief(); plot_market_detail(d, detail_market(d), isTRUE(input$db_anon))
+  }, w = 11, h = 4.5)
   output$db_profit  <- shiny::renderPlot(plot_profit_paths(shiny::req(dbrief()), isTRUE(input$db_anon)))
   # the explorer's figure: one firm, or both firms of the market stacked
   br_plot <- function(d, round) {
@@ -378,7 +393,8 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     if (identical(view_rv(), "debrief"))
       return(shiny::tagList(nav, ad_debrief(ns, dbrief(), scored_sessions(),
                                             debrief_sid(), flags(),
-                                            shiny::isolate(input$db_markets))))
+                                            shiny::isolate(input$db_markets),
+                                            shiny::isolate(input$db_detail_market))))
 
     body <- if (is.null(st)) ad_create(ns, game_choices)
       else switch(st$session$phase,
@@ -641,7 +657,7 @@ ad_finished <- function(ns, st) {
 
 # --- debrief -------------------------------------------------------------------
 
-ad_debrief <- function(ns, d, sessions, sid, fr, paths_markets = NULL) {
+ad_debrief <- function(ns, d, sessions, sid, fr, paths_markets = NULL, detail_market = NULL) {
   if (nrow(sessions) == 0)
     return(shiny::div(class = "card", shiny::div(class = "card-body",
       "No finished games to debrief yet. Run one from the Run tab.")))
@@ -702,6 +718,18 @@ ad_debrief <- function(ns, d, sessions, sid, fr, paths_markets = NULL) {
       shiny::plotOutput(ns("db_price"), height = "460px"),
       shiny::downloadButton(ns("dl_price"), "PNG", class = "btn btn-sm btn-outline-secondary")))
 
+  # one market's prices and profits; markets listed by rank in joint profit
+  rk <- dbf_market_ranks(d)
+  detail_choices <- stats::setNames(as.character(rk$market_id),
+    sprintf("Market %s (rank %d of %d by joint profit)", rk$market_id, rk$rank, nrow(rk)))
+  detail_card <- shiny::div(class = "card",
+    shiny::div(class = "card-header", "One market: prices and profits"),
+    shiny::div(class = "card-body",
+      shiny::selectInput(ns("db_detail_market"), "Market", choices = detail_choices,
+        selected = intersect(as.character(detail_market), detail_choices)),
+      shiny::plotOutput(ns("db_detail"), height = "380px"),
+      shiny::downloadButton(ns("dl_detail"), "PNG", class = "btn btn-sm btn-outline-secondary")))
+
   has_pred <- !is.null(d$predictions) && nrow(d$predictions) > 0
   pred_card <- if (has_pred) shiny::div(class = "card",
     shiny::div(class = "card-header", "Predictions vs. what happened"),
@@ -718,7 +746,10 @@ ad_debrief <- function(ns, d, sessions, sid, fr, paths_markets = NULL) {
       shiny::div(class = "card-body", shiny::tableOutput(ns("db_flags")))),
     pred_card,
     paths_card,
+    detail_card,
     fig_card("Average price per round", "db_avg", "dl_avg", 360),
+    fig_card("The spread of prices by round (25th percentile, median, 75th)",
+             "db_quart", "dl_quart", 360),
     br_card,
     fig_card("Cumulative profit", "db_profit", "dl_profit", 460),
     shiny::div(class = "card",

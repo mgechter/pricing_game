@@ -52,26 +52,96 @@ plot_price_paths <- function(d, anon = FALSE, markets = NULL, ncol = NULL) {
   strips <- .market_strips(res, anon)
   res$market <- factor(strips[as.character(res$market_id)], levels = strips)
   res$firm   <- factor(res$firm_label, levels = names(FIRM_COLOURS))
-  ln <- .benchmark_lines(d$benchmarks)
-  ln$text <- paste(ln$label, .usd(ln$y))
   # wrap the strip to its panel's width, so three panels across don't clip it
   cols <- ggplot2::wrap_dims(length(strips), ncol = ncol)[2]
   wrap <- max(18, floor(96 / cols))
 
   ggplot(res, aes(round, price, colour = firm, group = firm)) +
-    geom_hline(data = ln, aes(yintercept = y, linetype = label), colour = "grey45") +
-    geom_text(data = ln, aes(x = Inf, y = y, label = text), inherit.aes = FALSE,
-              hjust = 1.05, vjust = -0.45, size = 3, colour = "grey30") +
+    .benchmark_layers(d$benchmarks) +
     geom_line(na.rm = TRUE) +
     geom_point(na.rm = TRUE, size = 1.8) +
     facet_wrap(~ market, ncol = ncol, labeller = label_wrap_gen(width = wrap)) +
     scale_colour_manual(values = FIRM_COLOURS) +
-    scale_linetype_manual(values = c(NE = "dashed", Monopoly = "dotted",
-                                     Collusive = "dotdash"), guide = "none") +
     scale_x_continuous(breaks = function(l) seq(1, ceiling(max(l)), by = 1)) +
     expand_limits(y = 0) +
     labs(x = "Round", y = "Price ($)", colour = NULL,
          title = sprintf("%s: price paths", d$game$label %||% "Game")) +
+    PG_THEME()
+}
+
+# The NE / monopoly (/ collusive) lines, each labelled with its value at the
+# right edge. `extra` adds columns to the line data (a facet variable, say, so
+# the lines land in one panel only).
+.benchmark_layers <- function(b, extra = NULL) {
+  ln <- .benchmark_lines(b)
+  ln$text <- paste(ln$label, .usd(ln$y))
+  if (!is.null(extra)) for (k in names(extra)) ln[[k]] <- extra[[k]]
+  list(
+    geom_hline(data = ln, aes(yintercept = y, linetype = label), colour = "grey45"),
+    geom_text(data = ln, aes(x = Inf, y = y, label = text), inherit.aes = FALSE,
+              hjust = 1.05, vjust = -0.45, size = 3, colour = "grey30"),
+    scale_linetype_manual(values = c(NE = "dashed", Monopoly = "dotted",
+                                     Collusive = "dotdash"), guide = "none"))
+}
+
+QUARTILE_COLOURS <- c(`75th percentile` = "#E69F00", Median = "black",
+                      `25th percentile` = "#56B4E9")
+
+# The spread of the class's prices each round: the 25th percentile, median and
+# 75th percentile of every price scored that round.
+plot_price_quartiles <- function(d) {
+  res <- d$results[is.finite(d$results$price), , drop = FALSE]
+  if (!nrow(res)) stop("no scored prices yet", call. = FALSE)
+  rounds <- sort(unique(res$round))
+  qs <- do.call(rbind, lapply(rounds, function(r) {
+    p <- stats::quantile(res$price[res$round == r], c(0.75, 0.5, 0.25), names = FALSE)
+    data.frame(round = r, stat = names(QUARTILE_COLOURS), price = p)
+  }))
+  qs$stat <- factor(qs$stat, levels = names(QUARTILE_COLOURS))
+
+  ggplot(qs, aes(round, price, colour = stat, group = stat)) +
+    .benchmark_layers(d$benchmarks) +
+    geom_line(linewidth = 1) +
+    geom_point(size = 1.8) +
+    scale_colour_manual(values = QUARTILE_COLOURS) +
+    scale_x_continuous(breaks = function(l) seq(1, ceiling(max(l)), by = 1)) +
+    expand_limits(y = 0) +
+    labs(x = "Round", y = "Price ($)", colour = NULL,
+         title = d$game$label %||% "Game",
+         subtitle = "The spread of prices by round: the 25th percentile, median and 75th percentile") +
+    PG_THEME()
+}
+
+# One market's prices and round profits side by side, with its rank among the
+# markets by the two firms' total profit.
+plot_market_detail <- function(d, market_id, anon = FALSE) {
+  res <- d$results[d$results$market_id == market_id, , drop = FALSE]
+  if (!nrow(res)) stop("that market isn't available", call. = FALSE)
+  measures <- c("Price ($)", "Round profit ($)")
+  long <- rbind(
+    data.frame(round = res$round, firm = res$firm_label, measure = measures[1], value = res$price),
+    data.frame(round = res$round, firm = res$firm_label, measure = measures[2], value = res$profit))
+  long$measure <- factor(long$measure, levels = measures)
+  long$firm    <- factor(long$firm, levels = names(FIRM_COLOURS))
+  floor0 <- data.frame(round = min(res$round), value = 0,
+                       measure = factor(measures, levels = measures))
+  rk <- dbf_market_ranks(d)
+  rank_line <- if (market_id %in% rk$market_id)
+    sprintf("Rank %d of %d markets by the two firms' total profit (%s)",
+            rk$rank[rk$market_id == market_id], nrow(rk),
+            .usd(rk$joint_profit[rk$market_id == market_id]))
+
+  ggplot(long, aes(round, value, colour = firm, group = firm)) +
+    .benchmark_layers(d$benchmarks,
+                      list(measure = factor(measures[1], levels = measures))) +
+    geom_blank(data = floor0, aes(round, value), inherit.aes = FALSE) +
+    geom_line(na.rm = TRUE) +
+    geom_point(na.rm = TRUE, size = 1.8) +
+    facet_wrap(~ measure, nrow = 1, scales = "free_y") +
+    scale_colour_manual(values = FIRM_COLOURS) +
+    scale_x_continuous(breaks = function(l) seq(1, ceiling(max(l)), by = 1)) +
+    labs(x = "Round", y = NULL, colour = NULL,
+         title = .market_strips(res, anon)[[1]], subtitle = rank_line) +
     PG_THEME()
 }
 
@@ -269,8 +339,14 @@ debrief_write_figs <- function(d, dir, width = 9, height = 5.5, dpi = 200) {
     save("price_paths",       plot_price_paths(d)),
     save("price_paths_anon",  plot_price_paths(d, anon = TRUE)),
     save("average_price",     plot_avg_price(d), w = 8, h = 4.5),
+    save("price_quartiles",   plot_price_quartiles(d), w = 8, h = 4.5),
     save("cumulative_profit", plot_profit_paths(d))
   )
+  # every market's prices and profits, named by its rank in joint profit
+  rk <- dbf_market_ranks(d)
+  for (i in seq_len(nrow(rk)))
+    files <- c(files, save(sprintf("market_rank%d_m%s", rk$rank[i], rk$market_id[i]),
+                           plot_market_detail(d, rk$market_id[i]), w = 11, h = 4.5))
   flags <- dbf_flags(d)
   flags <- flags[flags$firm_label %in% c("Firm A", "Firm B"), , drop = FALSE]
   # one PNG per (market, round, firm): two flags on the same firm-round draw the
