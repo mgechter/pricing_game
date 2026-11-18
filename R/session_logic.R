@@ -87,9 +87,12 @@ sl_reset_to_lobby <- function(con, session_id) {
   db_run(con,
     "UPDATE players SET market_id = NULL, firm_label = NULL, shadow_of = NULL
      WHERE session_id = ?", list(session_id))
+  s <- sl_session(con, session_id)
+  n <- if (is.null(s)) NA_integer_ else as.integer(sl_game(s)$rounds)   # undo an early end
   db_run(con,
     "UPDATE sessions SET phase = 'lobby', current_round = 0, round_started_at = NULL,
-            predictions_forced = 0 WHERE session_id = ?", list(session_id))
+            predictions_forced = 0, n_rounds = COALESCE(?, n_rounds) WHERE session_id = ?",
+    list(n, session_id))
   invisible(TRUE)
 }
 
@@ -425,6 +428,18 @@ sl_score_round <- function(con, session_id, carry_forward = FALSE) {
 
   db_run(con, "UPDATE sessions SET phase = 'scored' WHERE session_id = ?", list(session_id))
   invisible(list(markets_scored = scored, skipped = skipped, no_shows = unique(no_shows)))
+}
+
+# End the game after the round just scored: that round becomes the last one, so
+# the leaderboard, projector and debrief cover rounds 1 to it.
+sl_end_early <- function(con, session_id) {
+  s <- sl_session(con, session_id)
+  if (is.null(s)) stop("no such session", call. = FALSE)
+  if (s$phase != "scored") stop("score the round first", call. = FALSE)
+  db_run(con,
+    "UPDATE sessions SET phase = 'finished', n_rounds = current_round WHERE session_id = ?",
+    list(session_id))
+  invisible("finished")
 }
 
 sl_advance_round <- function(con, session_id) {

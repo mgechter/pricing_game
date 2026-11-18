@@ -76,6 +76,25 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     st <- state(); shiny::req(st); guard(sl_advance_round(con, sid()))
   })
 
+  shiny::observeEvent(input$end_early, {
+    st <- state(); shiny::req(st)
+    r <- st$session$current_round
+    shiny::showModal(shiny::modalDialog(
+      title = sprintf("End the game after round %d?", r),
+      shiny::p(sprintf(paste0("Round %d becomes the last round. Students see their final results, ",
+                              "and the leaderboard, projector and Debrief cover %s. ",
+                              "The game cannot be resumed."),
+                       r, if (r == 1) "round 1 only" else sprintf("rounds 1 to %d", r))),
+      footer = shiny::tagList(shiny::modalButton("Cancel"),
+        shiny::actionButton(ns("end_ok"), "End the game", class = "btn btn-primary"))))
+  })
+  shiny::observeEvent(input$end_ok, {
+    st <- state(); shiny::req(st)
+    guard({ sl_end_early(con, sid())
+            shiny::showNotification("Game ended.", type = "message") })
+    shiny::removeModal()
+  })
+
   shiny::observeEvent(input$force_pred, {
     st <- state(); shiny::req(st)
     guard({ sl_force_predictions(con, sid())
@@ -540,6 +559,9 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
       shiny::actionButton(ns("advance"),
         if (s$current_round >= s$n_rounds) "Finish game" else "Next round",
         class = "btn btn-primary"),
+      if (s$current_round < s$n_rounds)
+        shiny::actionButton(ns("end_early"), "End the game after this round…",
+                            class = "btn btn-outline-secondary", style = "margin-left:.5rem;"),
       if (had_noshow) shiny::div(style = "margin-top:.75rem;",
         shiny::actionButton(ns("rescore_cf"),
           "Re-score, carrying the no-shows' last-round prices forward",

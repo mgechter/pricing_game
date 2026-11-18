@@ -253,6 +253,25 @@ test_that("a session can skip the prediction questions", {
   expect_equal(sl_session(con, sl_create_session(con, "bertrand", GAMES_PATH))$ask_predictions, 1)
 })
 
+test_that("the instructor can end a game early after a scored round", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "hotelling_high", GAMES_PATH)
+  ids <- join(con, sid, c("Ada", "Bo", "Cy", "Di"))
+  sl_start_game(con, sid, seed = 1)
+  for (pid in ids) sl_submit(con, sid, pid, 1, 100)
+  expect_error(sl_end_early(con, sid), "score the round first")    # not mid-round
+  sl_score_round(con, sid); sl_advance_round(con, sid)
+  for (pid in ids) sl_submit(con, sid, pid, 2, 110)
+  sl_score_round(con, sid)
+  sl_end_early(con, sid)
+  s <- sl_session(con, sid)
+  expect_equal(s$phase, "finished")
+  expect_equal(s$n_rounds, 2)                                        # round 2 is now the last
+  expect_equal(max(sl_load_state(con, sid)$results$round), 2)
+  sl_reset_to_lobby(con, sid)                                        # a reset restores the full game
+  expect_equal(sl_session(con, sid)$n_rounds, 10)
+})
+
 test_that("confirm is sticky and round status separates priced vs confirmed", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
