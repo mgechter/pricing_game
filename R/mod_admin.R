@@ -389,7 +389,8 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
       return(shiny::tagList(nav, ad_history(ns, sl_list_sessions(con))))
     if (identical(view_rv(), "figures"))
       return(shiny::tagList(nav, ad_slide_figures(ns, slide_figs(),
-                                                  isTRUE(shiny::isolate(input$sf_anon)))))
+                                                  isTRUE(shiny::isolate(input$sf_anon)),
+                                                  shiny::isolate(input$sf_market))))
     if (identical(view_rv(), "debrief"))
       return(shiny::tagList(nav, ad_debrief(ns, dbrief(), scored_sessions(),
                                             debrief_sid(), flags(),

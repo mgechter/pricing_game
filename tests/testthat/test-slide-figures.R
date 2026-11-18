@@ -53,6 +53,37 @@ test_that("every slide figure is drawn from the latest session of its game", {
   expect_false(any(grepl("P[1-6]\\b", cap)))                # no player names in the captions
 })
 
+test_that("the 2024 figures: quartiles per game, and every market's prices and profits", {
+  con <- fresh_db()
+  three_games(con)
+  ds   <- slide_figures_data(con)
+  figs <- slide_figures_from(ds)
+  q <- figs[vapply(figs, function(x) identical(x$set, "2024"), logical(1))]
+  expect_named(q, c("bertrand_price_quartiles", "hotelling_high_price_quartiles",
+                    "hotelling_low_price_quartiles"))
+  for (x in q) expect_s3_class(x$plot, "ggplot")
+
+  ch <- slide_market_choices(ds)
+  expect_named(ch, c("Bertrand", "Differentiated products, t = 1",
+                     "Differentiated products, t = 0.5"))
+  n_markets <- sum(vapply(ds, function(d) nrow(dbf_market_ranks(d)), integer(1)))
+  expect_length(unlist(ch), n_markets)
+  one <- slide_market_figure(ds, ch[[3]][[1]])
+  expect_s3_class(one$plot, "ggplot")
+  expect_match(one$id, "^hotelling_low_rank1_market\\d+$")
+  expect_null(slide_market_figure(ds, "hotelling_low|999"))
+  expect_null(slide_market_figure(ds, "nonsense"))
+
+  dir <- tempfile("sf_")
+  files <- slide_figures_write(figs, dir, ds = ds)
+  rel <- substring(files, nchar(dir) + 2)
+  mk  <- rel[startsWith(rel, "markets/")]
+  expect_length(mk, n_markets)
+  expect_true(all(grepl("^markets/(bertrand|hotelling_high|hotelling_low)_rank\\d+_market\\d+\\.png$", mk)))
+  expect_true(all(file.size(files) > 0))
+  expect_true(any(readLines(file.path(dir, "captions.txt")) == "markets/"))
+})
+
 test_that("a missing game, a nearest case and a one-round game each get a note", {
   con <- fresh_db()
   play_game(con, "bertrand", c("A", "B"), function(r, f, nr) if (f == "Firm A") 30 else 35)
@@ -81,9 +112,13 @@ test_that("a missing game, a nearest case and a one-round game each get a note",
 test_that("the Slide figures tab renders, and the admin server draws it on opening", {
   con <- fresh_db()
   three_games(con)
-  html <- as.character(ad_slide_figures(shiny::NS("t"), slide_figures_build(con)))
+  ds <- slide_figures_data(con)
+  figs <- slide_figures_from(ds); attr(figs, "markets") <- slide_market_choices(ds)
+  html <- as.character(ad_slide_figures(shiny::NS("t"), figs))
   expect_match(html, "Download all (ZIP)", fixed = TRUE)
   for (id in ids) expect_match(html, paste0(id, ".png"), fixed = TRUE)
+  expect_match(html, "One market's prices and profits", fixed = TRUE)
+  expect_match(html, "Like the 2024 debrief", fixed = TRUE)
   expect_match(as.character(ad_nav(shiny::NS("t"), "figures")), "Slide figures", fixed = TRUE)
 
   shiny::testServer(admin_server, args = list(con = con, games_path = GAMES_PATH), {
@@ -91,5 +126,6 @@ test_that("the Slide figures tab renders, and the admin server draws it on openi
     session$setInputs(nav_figures = 1)
     expect_named(slide_figs(), ids)
     expect_match(output$screen$html, "hotelling_low_last_round_cuts.png", fixed = TRUE)
+    expect_match(output$screen$html, "rank 1 of", fixed = TRUE)   # the market picker
   })
 })
