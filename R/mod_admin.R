@@ -381,7 +381,7 @@ ad_create <- function(ns, choices) shiny::div(class = "card",
     shiny::selectInput(ns("game_id"), "Game", choices = choices),
     shiny::textInput(ns("new_label"), "Label (optional)", placeholder = "e.g. Section A — Bertrand"),
     shiny::checkboxInput(ns("new_pred"),
-      "Ask the game's prediction questions before round 1", TRUE),
+      "Ask the game's prediction questions before round 1", FALSE),
     shiny::fluidRow(
       shiny::column(4, shiny::numericInput(ns("new_timer"),
         "Round timer (seconds, 0 = off)", value = 0, min = 0, step = 15)),
