@@ -19,6 +19,7 @@ source("R/session_logic.R")
 source("R/export.R")
 source("R/debrief_data.R")
 source("R/debrief_plots.R")
+source("R/slide_figures.R")       # ECON 30303's "Slide figures" tab
 source("R/ui_helpers.R")
 source("R/mod_player.R")
 source("R/mod_admin.R")

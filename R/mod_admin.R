@@ -206,6 +206,8 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
 
   # ---- debrief ----------------------------------------------------------------
   shiny::observeEvent(input$nav_debrief, view_rv("debrief"))
+  shiny::observeEvent(input$nav_figures, view_rv("figures"))      # ECON 30303
+  slide_figs <- slide_figures_server(input, output, con, view_rv)
   debrief_sid <- shiny::reactiveVal(NULL)
   dbf_tick    <- shiny::reactiveVal(0)
 
@@ -370,6 +372,9 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     nav <- ad_nav(ns, view_rv())
     if (identical(view_rv(), "history"))
       return(shiny::tagList(nav, ad_history(ns, sl_list_sessions(con))))
+    if (identical(view_rv(), "figures"))
+      return(shiny::tagList(nav, ad_slide_figures(ns, slide_figs(),
+                                                  isTRUE(shiny::isolate(input$sf_anon)))))
     if (identical(view_rv(), "debrief"))
       return(shiny::tagList(nav, ad_debrief(ns, dbrief(), scored_sessions(),
                                             debrief_sid(), flags(),
@@ -395,7 +400,8 @@ ad_nav <- function(ns, view) {
   shiny::div(style = "margin-bottom:1rem;",
     lk("nav_run", "Run", view == "run"), sep,
     lk("nav_history", "History", view == "history"), sep,
-    lk("nav_debrief", "Debrief", view == "debrief"))
+    lk("nav_debrief", "Debrief", view == "debrief"), sep,
+    lk("nav_figures", "Slide figures", view == "figures"))
 }
 
 ad_create <- function(ns, choices) shiny::div(class = "card",
