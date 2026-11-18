@@ -264,19 +264,30 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
   })
   output$db_avg     <- shiny::renderPlot(plot_avg_price(shiny::req(dbrief())))
   output$db_profit  <- shiny::renderPlot(plot_profit_paths(shiny::req(dbrief()), isTRUE(input$db_anon)))
+  # the explorer's figure: one firm, or both firms of the market stacked
+  br_plot <- function(d, round) {
+    firm <- input$br_firm %||% "Firm A"
+    if (identical(firm, "Both firms"))
+      plot_best_response_pair(d, br_market(), round, anon = isTRUE(input$db_anon))
+    else plot_best_response(d, br_market(), round, firm, anon = isTRUE(input$db_anon))
+  }
+  br_both <- function() identical(input$br_firm, "Both firms")
   output$db_br <- shiny::renderPlot({
     d <- shiny::req(dbrief())
-    plot_best_response(d, br_market(),
-                       as.integer(input$br_round %||% min(d$results$round)),
-                       input$br_firm %||% "Firm A")
-  })
+    br_plot(d, as.integer(input$br_round %||% min(d$results$round)))
+  }, height = function() if (br_both()) 600 else 380)
   output$dl_price  <- gg_png(function() {
     d <- dbrief(); plot_price_paths(d, isTRUE(input$db_anon), paths_markets(d))
   })
   output$dl_avg    <- gg_png(function() plot_avg_price(dbrief()), h = 4.5)
   output$dl_profit <- gg_png(function() plot_profit_paths(dbrief(), isTRUE(input$db_anon)))
-  output$dl_br     <- gg_png(function() plot_best_response(dbrief(), br_market(),
-                        as.integer(input$br_round), input$br_firm %||% "Firm A"), h = 4.5)
+  output$dl_br <- shiny::downloadHandler(
+    filename = function() "figure.png",
+    content  = function(file) {
+      dev <- if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png else grDevices::png
+      ggplot2::ggsave(file, br_plot(dbrief(), as.integer(input$br_round)), device = dev,
+                      width = 9, height = if (br_both()) 7 else 4.5, dpi = 200)
+    })
 
   output$db_flags   <- shiny::renderTable(
     { fr <- flags(); if (is.null(fr) || !nrow(fr)) return(NULL)
@@ -668,10 +679,11 @@ ad_debrief <- function(ns, d, sessions, sid, fr, paths_markets = NULL) {
         shiny::column(3, shiny::selectInput(ns("br_round"), "Round", choices = rounds,
                                             selected = max(rounds))),
         shiny::column(3, shiny::radioButtons(ns("br_firm"), "Firm",
-                                             choices = c("Firm A", "Firm B"), inline = TRUE)),
+                                             choices = c("Firm A", "Firm B", "Both firms"),
+                                             inline = TRUE)),
         shiny::column(3, shiny::selectInput(ns("flag_pick"), "Jump to a flag",
                                             choices = flag_choices))),
-      shiny::plotOutput(ns("db_br"), height = "380px"),
+      shiny::plotOutput(ns("db_br"), height = "auto"),
       shiny::downloadButton(ns("dl_br"), "PNG", class = "btn btn-sm btn-outline-secondary")))
 
   # a re-render keeps the markets already picked, as far as this session has them

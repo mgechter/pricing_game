@@ -108,39 +108,109 @@ plot_profit_paths <- function(d, anon = FALSE, cumulative = TRUE) {
     PG_THEME()
 }
 
-# Payoff of one firm as a function of its own price, given the rival's actual
-# price in a chosen market/round; marks the actual choice, best response and NE.
-plot_best_response <- function(d, market_id, round, focal = "Firm A") {
+# Where a price sits against the game's benchmarks, in words.
+.price_relation <- function(p, b, tol = 1e-6) {
+  ne <- b$ne %||% NA_real_; mono <- b$monopoly %||% NA_real_
+  if (is.finite(mono) && p > mono + tol) sprintf("above the monopoly price (%s)", .usd(mono))
+  else if (is.finite(mono) && abs(p - mono) <= tol) sprintf("at the monopoly price (%s)", .usd(mono))
+  else if (is.finite(ne) && p < ne - tol) sprintf("below the Nash price (%s)", .usd(ne))
+  else if (is.finite(ne) && abs(p - ne) <= tol) sprintf("at the Nash price (%s)", .usd(ne))
+  else sprintf("between the Nash (%s) and monopoly (%s) prices", .usd(ne), .usd(mono))
+}
+
+# One firm's best-response panel: its round profit at every own price, given
+# the rival's actual price that round, and where its actual price, its best
+# response, NE and monopoly sit.
+.br_panel <- function(d, market_id, round, focal, anon = FALSE) {
   r  <- d$results[d$results$market_id == market_id & d$results$round == round, ]
   fr <- r[r$firm_label == focal, ]
   # the rival is the other firm; a shadow in an odd-headcount market is not one
   rr <- r[!(r$firm_label %in% c(focal, "Shadow")), ]
-  if (!nrow(fr) || !nrow(rr) || is.na(rr$price))
+  if (nrow(fr) != 1 || nrow(rr) != 1 || is.na(rr$price))
     stop("that market / round isn't available", call. = FALSE)
 
   rival_p <- rr$price
-  br      <- best_response(d$model, d$params, rival_p)
-  b       <- d$benchmarks
-  vl <- data.frame(
-    x = c(fr$price, br$price, b$ne),
-    label = factor(c("Actual", "Best response", "NE"),
-                   levels = c("Actual", "Best response", "NE")))
-  vl <- vl[is.finite(vl$x), , drop = FALSE]
+  br <- best_response(d$model, d$params, rival_p)
+  b  <- d$benchmarks
+  marks <- data.frame(kind = c("Actual", "Best response", "NE", "Monopoly"),
+                      x = c(fr$price, br$price, b$ne %||% NA, b$monopoly %||% NA))
+  marks <- marks[is.finite(marks$x), , drop = FALSE]
+  point <- if (is.finite(fr$price))
+    data.frame(x = fr$price, y = own_profit(d$model, d$params, fr$price, rival_p))
+    else data.frame(x = numeric(0), y = numeric(0))
+  name <- function(row) if (!anon && nzchar(row$display_name %||% "")) row$display_name
+                        else row$firm_label
+  list(curve = br$curve, marks = marks, point = point,
+       focal = name(fr), rival = name(rr), rival_p = rival_p,
+       relation = .price_relation(rival_p, b))
+}
 
-  fname <- if (nzchar(fr$display_name %||% "")) fr$display_name else focal
-  rname <- if (nzchar(rr$display_name %||% "")) rr$display_name else rr$firm_label
+MARK_COLOURS <- c(Actual = "forestgreen", `Best response` = "firebrick",
+                  NE = "grey40", Monopoly = "#0072B2")
+MARK_LINES   <- c(Actual = "solid", `Best response` = "dashed",
+                  NE = "dashed", Monopoly = "dotted")
 
-  ggplot(br$curve, aes(price, profit)) +
+# Draw one or more .br_panel()s, stacked. Each line is labelled with its value
+# beside it (staggered down the panel so lines at the same price stay legible);
+# `strips` = one label per panel, or NULL for a single panel without a strip.
+.plot_br_panels <- function(panels, strips = NULL) {
+  key <- factor(if (is.null(strips)) rep("only", length(panels)) else strips,
+                levels = unique(if (is.null(strips)) "only" else strips))
+  stack <- function(part) do.call(rbind, Map(function(p, k) {
+    x <- p[[part]]; if (nrow(x)) x$panel <- k else x$panel <- key[0]; x
+  }, panels, as.list(key)))
+  curve <- stack("curve"); marks <- stack("marks"); pts <- stack("point")
+
+  # labels sit in a band above the curve's peak, one row per kind of line
+  top  <- tapply(curve$profit, curve$panel, max)
+  top[!is.finite(top) | top <= 0] <- 1
+  lo   <- min(curve$price); hi <- max(curve$price)
+  step <- c(Actual = 1.42, `Best response` = 1.31, NE = 1.20, Monopoly = 1.09)
+  marks$ly   <- as.numeric(top[as.character(marks$panel)]) * step[marks$kind]
+  marks$hj   <- ifelse(marks$x > lo + 0.72 * (hi - lo), 1.04, -0.04)
+  marks$text <- sprintf("%s %s", marks$kind, .usd(marks$x))
+  band <- data.frame(panel = factor(names(top), levels = levels(key)),
+                     price = lo, profit = as.numeric(top) * 1.48)
+
+  g <- ggplot(curve, aes(price, profit)) +
+    geom_blank(data = band) +
     geom_line(linewidth = 1) +
-    geom_vline(data = vl, aes(xintercept = x, colour = label), linetype = "dashed") +
-    scale_colour_manual(values = c(Actual = "forestgreen",
-                                   `Best response` = "firebrick", NE = "grey40")) +
-    labs(x = "Own price ($)", y = "Round profit ($)", colour = NULL,
-         title = sprintf("%s's payoff vs its own price — Market %s, round %d",
-                         fname, market_id, round),
-         subtitle = sprintf("given %s priced $%s", rname,
-                            formatC(rival_p, format = "f", digits = 2))) +
+    geom_vline(data = marks, aes(xintercept = x, colour = kind, linetype = kind),
+               linewidth = 0.7) +
+    geom_text(data = marks, aes(x = x, y = ly, label = text, colour = kind, hjust = hj),
+              vjust = 0.5, size = 3.3, show.legend = FALSE) +
+    geom_point(data = pts, aes(x = x, y = y), inherit.aes = FALSE,
+               colour = MARK_COLOURS[["Actual"]], size = 2.6) +
+    scale_colour_manual(values = MARK_COLOURS, guide = "none") +
+    scale_linetype_manual(values = MARK_LINES, guide = "none") +
+    labs(x = "Own price ($)", y = "Round profit ($)") +
     PG_THEME()
+  if (!is.null(strips)) g <- g + facet_wrap(~ panel, ncol = 1, scales = "free_y")
+  g
+}
+
+# Payoff of one firm as a function of its own price, given the rival's actual
+# price in a chosen market/round; marks the actual choice, best response, NE
+# and monopoly.
+plot_best_response <- function(d, market_id, round, focal = "Firm A", anon = FALSE) {
+  p <- .br_panel(d, market_id, round, focal, anon)
+  .plot_br_panels(list(p)) +
+    labs(title = sprintf("%s's round %d profit at each own price (market %s)",
+                         p$focal, round, market_id),
+         subtitle = sprintf("given %s's price of %s, %s", p$rival, .usd(p$rival_p),
+                            p$relation))
+}
+
+# Both firms of one market in one round, stacked: each one's profit at every own
+# price given the other's actual price. `first` is the firm drawn on top.
+plot_best_response_pair <- function(d, market_id, round, first = "Firm A", anon = FALSE) {
+  firms <- c(first, setdiff(c("Firm A", "Firm B"), first))
+  ps <- lapply(firms, function(f) .br_panel(d, market_id, round, f, anon))
+  strips <- vapply(ps, function(p) sprintf("%s, given %s's price of %s, %s",
+                                           p$focal, p$rival, .usd(p$rival_p), p$relation), "")
+  .plot_br_panels(ps, strips) +
+    labs(title = sprintf("Market %s, round %d: each firm's profit at each own price",
+                         market_id, round))
 }
 
 # One prediction question. own_r1 -> predicted-vs-actual scatter; choice -> bar;

@@ -125,6 +125,53 @@ test_that("price paths name each pair, label the benchmarks, and draw chosen mar
   expect_error(plot_price_paths(d, markets = 999), "none of those markets")
 })
 
+# a plot's title / subtitle, under ggplot2 3.5 and 4.0 alike
+plot_lab <- function(p, k)
+  if (exists("get_labs", asNamespace("ggplot2"))) ggplot2::get_labs(p)[[k]] else p$labels[[k]]
+layer_text <- function(p)
+  Filter(function(l) inherits(l$geom, "GeomText"), p$layers)[[1]]$data$text
+
+test_that("best-response figure labels each line with its value and says where the rival priced", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)               # NE 0, monopoly 50
+  join(con, sid, c("Ada", "Boaz")); sl_start_game(con, sid, seed = 1)
+  play_out(con, sid, function(r, f, p) if (f == "Firm A") 46.4 else 52.1)
+  d  <- dbf_load(con, sid)
+  mk <- unique(d$results$market_id)
+  who <- function(f) d$results$display_name[d$results$firm_label == f][1]
+
+  p <- plot_best_response(d, mk, 1, "Firm A")
+  expect_setequal(layer_text(p),
+                  c("Actual $46.40", "Best response $50.00", "NE $0.00", "Monopoly $50.00"))
+  expect_match(plot_lab(p, "title"), paste0("^", who("Firm A"), "'s round 1 profit"))
+  expect_match(plot_lab(p, "subtitle"), "above the monopoly price ($50.00)", fixed = TRUE)
+  expect_match(plot_lab(p, "subtitle"), who("Firm B"), fixed = TRUE)
+
+  q <- plot_best_response(d, mk, 1, "Firm B")
+  expect_match(plot_lab(q, "subtitle"), "between the Nash ($0.00) and monopoly ($50.00) prices",
+               fixed = TRUE)
+  expect_match(plot_lab(plot_best_response(d, mk, 1, "Firm A", anon = TRUE), "title"), "^Firm A's")
+})
+
+test_that("both firms of a market stack in one figure, chosen firm on top", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "hotelling_low", GAMES_PATH)          # monopoly 225
+  join(con, sid, c("Ada", "Boaz", "Cleo")); sl_start_game(con, sid, seed = 1)
+  play_out(con, sid, function(r, f, p) if (f == "Firm A") 230 else 110)
+  d  <- dbf_load(con, sid)
+  mk <- unique(d$results$market_id[d$results$firm_label == "Shadow"])
+  b_name <- d$results$display_name[d$results$market_id == mk & d$results$firm_label == "Firm B"][1]
+
+  q <- plot_best_response_pair(d, mk, 2, first = "Firm B")
+  strips <- levels(q$data$panel)
+  expect_length(strips, 2)
+  expect_match(strips[1], paste0("^", b_name, ", given "))
+  expect_match(strips[1], "above the monopoly price ($225.00)", fixed = TRUE)
+  expect_length(layer_text(q), 8)                       # four lines in each panel
+  expect_error(plot_best_response(d, mk, 2, "Shadow"), "isn't available")
+  expect_error(plot_best_response_pair(d, 999, 2), "isn't available")
+})
+
 test_that("best-response explorer works in a market with a shadow player", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
