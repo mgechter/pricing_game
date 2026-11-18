@@ -93,7 +93,8 @@ dbf_flags <- function(d, top_n = 2L) {
   res <- d$results
   ne  <- d$benchmarks$ne %||% 0
   if (!nrow(res)) return(.flags_empty())
-  m0 <- function(x) formatC(x, format = "f", digits = 0, big.mark = ",")
+  m0 <- function(x) formatC(x, format = "f", digits = 0, big.mark = ",")   # profits
+  m2 <- function(x) formatC(x, format = "f", digits = 2, big.mark = ",")   # prices
   out <- list()
 
   swing <- res |>
@@ -122,7 +123,7 @@ dbf_flags <- function(d, top_n = 2L) {
     out$br <- data.frame(kind = "Off best response", market_id = brs$market_id,
       round = brs$round, firm_label = brs$firm_label, who = brs$display_name,
       detail = sprintf("%s priced $%s; best response to the rival's $%s was $%s",
-                       brs$display_name, m0(brs$price), m0(brs$rival_price), m0(brs$br)),
+                       brs$display_name, m2(brs$price), m2(brs$rival_price), m2(brs$br)),
       score = brs$score)
   }
 
@@ -137,7 +138,7 @@ dbf_flags <- function(d, top_n = 2L) {
       out[[paste0("col", mk)]] <- data.frame(kind = "Tacit collusion", market_id = mk,
         round = w$round[col$end], firm_label = "both", who = "both firms",
         detail = sprintf("both firms priced above NE ($%s) for rounds %d–%d",
-                         m0(ne), w$round[col$start], w$round[col$end]),
+                         m2(ne), w$round[col$start], w$round[col$end]),
         score = col$len)
     cas <- .longest_true_run(diff(a) < 0 & diff(b) < 0)
     if (cas$len >= 3)

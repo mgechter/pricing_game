@@ -462,7 +462,7 @@ ad_market_table <- function(st) {
   price_of <- function(id) {
     row <- sub[sub$player_id == id, , drop = FALSE]
     if (nrow(row))
-      return(paste0(money0(row$price[1]),
+      return(paste0(money2(row$price[1]),
                     if (isTRUE(row$carried[1] == 1)) " (carried)" else ""))
     rr <- res[res$player_id == id, , drop = FALSE]
     if (nrow(rr) && isTRUE(rr$no_submission[1] == 1)) return("(no submission)")

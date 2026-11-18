@@ -100,7 +100,7 @@ plot_best_response <- function(d, market_id, round, focal = "Firm A") {
          title = sprintf("%s's payoff vs its own price — Market %s, round %d",
                          fname, market_id, round),
          subtitle = sprintf("given %s priced $%s", rname,
-                            formatC(rival_p, format = "f", digits = 0))) +
+                            formatC(rival_p, format = "f", digits = 2))) +
     PG_THEME()
 }
 

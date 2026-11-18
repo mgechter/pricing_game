@@ -114,10 +114,10 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
     carried <- if (isTRUE(sub$carried[1] == 1)) " (carried from last round)" else ""
     if (isTRUE(sub$confirmed[1] == 1))
       sprintf("Submitted ✓ — %s%s. You can still change it until the round closes.",
-              money0(sub$price[1]), carried)
+              money2(sub$price[1]), carried)
     else
       sprintf("Saved automatically: %s%s. Click Submit when you're happy with it.",
-              money0(sub$price[1]), carried)
+              money2(sub$price[1]), carried)
   })
 
   shiny::observeEvent(input$pred_submit, {
@@ -306,11 +306,11 @@ pl_result <- function(p, st, r) {
     return(pl_card(sprintf("Round %d results", rnd),
       sprintf("You didn't submit a price, so you were out of the market — no sales, $0 this round. Cumulative profit: %s.",
               money0(r$cumulative_profit))))
-  rival_txt <- if (is.na(r$rival_price)) "no submission" else money0(r$rival_price)
+  rival_txt <- if (is.na(r$rival_price)) "no submission" else money2(r$rival_price)
   shiny::div(class = "card",
     shiny::div(class = "card-header", sprintf("Round %d results", rnd)),
     shiny::div(class = "card-body",
-      stat_block("Your price",   money0(r$price)),
+      stat_block("Your price",   money2(r$price)),
       stat_block("Rival price",  rival_txt),
       stat_block("Units sold",   num1(r$quantity)),
       stat_block("Round profit", money0(r$profit)),
@@ -323,8 +323,8 @@ pl_finished <- function(p, st) {
   mine <- mine[order(mine$round), ]
   tbl <- data.frame(
     Round        = mine$round,
-    `Your price` = vapply(mine$price, money0, ""),
-    `Rival price`= vapply(mine$rival_price, money0, ""),
+    `Your price` = vapply(mine$price, money2, ""),
+    `Rival price`= vapply(mine$rival_price, money2, ""),
     Profit       = vapply(mine$profit, money0, ""),
     Cumulative   = vapply(mine$cumulative_profit, money0, ""),
     check.names = FALSE)
