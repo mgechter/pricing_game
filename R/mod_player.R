@@ -279,7 +279,7 @@ pl_predict <- function(ns, questions, answers) {
     shiny::div(class = "card-header", "Before we start — your predictions"),
     shiny::div(class = "card-body",
       shiny::p(class = "pg-muted",
-        "You're graded on turning these in, not on being right. They lock once you submit."),
+        "Your answers lock once you submit."),
       fields,
       shiny::actionButton(ns("pred_submit"), "Lock in my predictions",
                           class = "btn btn-primary")))
