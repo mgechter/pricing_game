@@ -35,7 +35,12 @@ test_that("every slide figure is drawn from the latest session of its game", {
   figs <- slide_figures_build(con)
   expect_named(figs, ids)
   for (x in figs) expect_s3_class(x$plot, "ggplot")
-  expect_match(figs$bertrand_price_paths$source, sprintf("Session #%d,", s$bert), fixed = TRUE)
+  # sessions made without a label: "Session #2: 4 rounds scored.", never "NA"
+  expect_match(figs$bertrand_price_paths$source, sprintf("^Session #%d: 4 rounds scored\\.$", s$bert))
+  expect_false(any(grepl("NA", vapply(figs, function(x) x$source %||% "", ""))))
+  sl_set_label(con, s$low, "Section 002")
+  expect_match(slide_figures_build(con)$hotelling_low_price_paths$source,
+               sprintf("^Session #%d, Section 002: ", s$low))
   expect_match(figs$bertrand_rival_above_monopoly$note,
                "the rival priced $52.10, above the monopoly price ($50.00)", fixed = TRUE)
   expect_match(figs$hotelling_high_rival_below_ne$note,

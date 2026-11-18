@@ -52,8 +52,10 @@ slide_figure_one <- function(f, d, anon = FALSE) {
   }
   g <- .sf_game_name(d)
   last <- max(d$results$round)
-  x$source <- sprintf("Session #%s, %s: %d round%s scored%s.",
-                      d$session$session_id, d$session$label %||% "unnamed", last,
+  lab  <- d$session$label
+  named <- length(lab) == 1 && !is.na(lab) && nzchar(trimws(lab))   # a session made without a label has NA
+  x$source <- sprintf("Session #%s%s: %d round%s scored%s.",
+                      d$session$session_id, if (named) paste0(", ", lab) else "", last,
                       if (last == 1) "" else "s",
                       if (!identical(d$session$phase, "finished")) ", game still running" else "")
   res <- tryCatch(switch(f$kind,
