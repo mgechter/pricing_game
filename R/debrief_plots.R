@@ -74,7 +74,8 @@ plot_profit_paths <- function(d, anon = FALSE, cumulative = TRUE) {
 plot_best_response <- function(d, market_id, round, focal = "Firm A") {
   r  <- d$results[d$results$market_id == market_id & d$results$round == round, ]
   fr <- r[r$firm_label == focal, ]
-  rr <- r[r$firm_label != focal, ]
+  # the rival is the other firm; a shadow in an odd-headcount market is not one
+  rr <- r[!(r$firm_label %in% c(focal, "Shadow")), ]
   if (!nrow(fr) || !nrow(rr) || is.na(rr$price))
     stop("that market / round isn't available", call. = FALSE)
 

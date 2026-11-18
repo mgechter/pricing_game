@@ -96,6 +96,18 @@ test_that("plot builders return ggplot objects; best-response guards bad input",
   expect_error(plot_best_response(d, 999, 2, "Firm A"), "isn't available")
 })
 
+test_that("best-response explorer works in a market with a shadow player", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  join(con, sid, sprintf("P%d", 1:5)); sl_start_game(con, sid, seed = 1)
+  play_out(con, sid, function(r, f, p) 40 - 5 * r)
+  d  <- dbf_load(con, sid)
+  mk <- unique(d$results$market_id[d$results$firm_label == "Shadow"])
+  expect_length(mk, 1)
+  for (f in c("Firm A", "Firm B"))
+    expect_s3_class(plot_best_response(d, mk, 2, f), "ggplot")
+})
+
 test_that("dbf_predictions summarises answers and computes actuals", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
