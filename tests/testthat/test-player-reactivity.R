@@ -69,3 +69,16 @@ test_that("the reactiveVal gate only re-renders on a real key change", {
   state(st_open(round = 2, results = res1))
   flush(); expect_equal(renders, base + 2)                   # results in -> one re-render
 })
+
+test_that("the lobby head-count keeps counting while a student waits", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  join(con, sid, c("Ada", "Boaz"))
+  shiny::testServer(player_server, args = list(con = con), {
+    session$elapse(1100)
+    expect_match(output$lobby_count$html, "2 player\\(s\\) in the lobby")
+    join(con, sid, "Cleo")                                   # someone joins later
+    session$elapse(1100)
+    expect_match(output$lobby_count$html, "3 player\\(s\\) in the lobby")
+  })
+})

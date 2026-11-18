@@ -2,7 +2,8 @@
 
 player_ui <- function(id) {
   ns <- shiny::NS(id)
-  shiny::div(class = "pg-narrow", shiny::uiOutput(ns("screen")))
+  shiny::div(class = "pg-narrow", shiny::uiOutput(ns("screen")),
+             shiny::uiOutput(ns("lobby_count")))
 }
 
 player_server <- function(id, con) shiny::moduleServer(id, function(input, output, session) {
@@ -153,6 +154,18 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
     })
   })
 
+  # The lobby head-count. It sits outside the screen, which re-renders only on
+  # this student's own changes (screen_key), so the count keeps up as others
+  # join; inside the screen it showed the number from when the screen was
+  # drawn, which right after joining left the student out of their own count.
+  output$lobby_count <- shiny::renderUI({
+    st <- state(); p <- me()
+    if (is.null(st) || st$session$phase != "lobby") return(NULL)
+    n <- nrow(st$players)
+    shiny::p(class = "pg-muted", style = "text-align:center;",
+             sprintf(if (is.null(p)) "%d player(s) in the lobby." else "%d player(s) joined.", n))
+  })
+
   # Independent of screen_key so the countdown never rebuilds the price input.
   output$timer <- shiny::renderUI({
     shiny::invalidateLater(1000)
@@ -236,7 +249,6 @@ pl_card <- function(title, body) shiny::div(class = "card",
 pl_join <- function(ns, st) shiny::div(class = "card",
   shiny::div(class = "card-header", sprintf("Pricing game — %s", st$game$label)),
   shiny::div(class = "card-body",
-    shiny::p(sprintf("%d player(s) in the lobby.", nrow(st$players))),
     shiny::textInput(ns("name"), "Your name", placeholder = "e.g. Jordan"),
     shiny::actionButton(ns("join"), "Join", class = "btn btn-primary")))
 
@@ -244,8 +256,7 @@ pl_lobby <- function(p, st) shiny::div(class = "card",
   shiny::div(class = "card-header", "You're in"),
   shiny::div(class = "card-body",
     shiny::div(class = "pg-big", p$display_name),
-    shiny::p(class = "pg-muted",
-      sprintf("Waiting for the instructor to start. %d player(s) joined.", nrow(st$players)))))
+    shiny::p(class = "pg-muted", "Waiting for the instructor to start.")))
 
 pl_predict <- function(ns, questions, answers) {
   cur <- function(qid) {
