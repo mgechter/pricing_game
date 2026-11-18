@@ -84,22 +84,41 @@ slide_figure_one <- function(f, d, anon = FALSE) {
            w = 10, h = 6.5)
     },
     last_round_cuts = {
-      lc <- dbf_last_round_cuts(d, 2)
-      if (!nrow(lc)) stop("the game has one round, so no last-round cut to show", call. = FALSE)
-      cuts <- ifelse(lc$cut > 0, sprintf("%s in market %s", .usd(lc$cut), lc$market_id),
-                     sprintf("none in market %s", lc$market_id))
-      note <- sprintf("In round %d, the last round played, the biggest price cut%s %s.", last,
-                      if (nrow(lc) > 1) "s were" else " was", paste(cuts, collapse = " and "))
-      if (!all(lc$exact))
-        note <- paste(note, "Fewer than two markets had both firms above the Nash price",
-                      "before cutting in the last round, so this includes the next-biggest cuts.")
-      list(title = sprintf("%s: the two biggest last-round price cuts", g),
+      all_cuts <- dbf_last_round_cuts(d, n = Inf)
+      lc <- utils::head(all_cuts, 2)
+      if (!nrow(lc)) stop(if (last < 2) "the game has one round, so there is no last-round cut"
+                          else "no market has prices in both of its last two rounds",
+                          call. = FALSE)
+      cut_text <- function(r) paste(ifelse(r$cut > 0,
+        sprintf("%s in market %s", .usd(r$cut), r$market_id),
+        sprintf("no cut in market %s", r$market_id)), collapse = " and ")
+      held <- lc[lc$exact, , drop = FALSE]; rest <- lc[!lc$exact, , drop = FALSE]
+      note <- character(0)
+      # the markets are chosen for the slide's point (a cut after both firms had
+      # held prices above Nash), so the caption says so rather than "biggest"
+      if (nrow(held)) note <- c(note, sprintf(
+        "In round %d, the last round played, the biggest cut%s after both firms had priced above the Nash price the round before: %s.",
+        last, if (nrow(held) > 1) "s" else "", cut_text(held)))
+      if (nrow(rest)) note <- c(note, sprintf(
+        "%s %s, the next-biggest cut%s, since %s cut after both firms priced above the Nash price.",
+        if (nrow(held)) "Also shown:" else sprintf("In round %d, the last round played, shown:", last),
+        cut_text(rest), if (nrow(rest) > 1) "s" else "",
+        if (nrow(held)) "no other market" else "no market"))
+      left_out <- all_cuts[!(all_cuts$market_id %in% lc$market_id) &
+                           all_cuts$cut > max(lc$cut), , drop = FALSE]
+      if (nrow(left_out)) note <- c(note, sprintf(
+        "Not shown: a bigger cut of %s in market %s, after a firm there had priced at or below the Nash price.",
+        .usd(left_out$cut[1]), left_out$market_id[1]))
+      list(title = sprintf("%s: last-round price cuts after prices above the Nash price", g),
            plot = plot_price_paths(d, anon, markets = lc$market_id, ncol = 1) +
              labs(title = sprintf("%s: last-round price cuts", g)),
-           note = note, w = 6.5, h = 1.6 + 2.6 * nrow(lc))
+           note = paste(note, collapse = " "), w = 6.5, h = 1.6 + 2.6 * nrow(lc))
     },
-    quartiles = list(title = sprintf("%s: the spread of prices by round", g),
-                     plot = plot_price_quartiles(d) + labs(title = g), w = 8, h = 4.5)),
+    quartiles = {
+      if (!any(is.finite(d$results$price))) stop("no prices were scored in this game", call. = FALSE)
+      list(title = sprintf("%s: the spread of prices by round", g),
+           plot = plot_price_quartiles(d) + labs(title = g), w = 8, h = 4.5)
+    }),
     error = function(e) list(title = sprintf("%s: %s", g, f$id),
                              note = sprintf("Can't draw this figure: %s.", conditionMessage(e))))
   x[names(res)] <- res

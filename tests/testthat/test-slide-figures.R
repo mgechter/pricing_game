@@ -48,7 +48,8 @@ test_that("every slide figure is drawn from the latest session of its game", {
   expect_match(figs$hotelling_low_rival_above_monopoly_both_firms$note,
                "round 2: the rival priced $230.00, above the monopoly price ($225.00)", fixed = TRUE)
   expect_match(figs$hotelling_low_last_round_cuts$note,
-               "In round 10, the last round played, the biggest price cuts were $80.00 in market",
+               paste("In round 10, the last round played, the biggest cuts after both firms",
+                     "had priced above the Nash price the round before: $80.00 in market"),
                fixed = TRUE)
 
   files <- slide_figures_write(figs, tempfile("sf_"))
@@ -133,4 +134,51 @@ test_that("the Slide figures tab renders, and the admin server draws it on openi
     expect_match(output$screen$html, "hotelling_low_last_round_cuts.png", fixed = TRUE)
     expect_match(output$screen$html, "rank 1 of", fixed = TRUE)   # the market picker
   })
+})
+
+# --- defects from the adversarial review (Codex, 2026-11-18), failing at 47bd021 ---
+
+.sf_start <- function(con, game, n = 2L) {
+  id <- sl_create_session(con, game, GAMES_PATH, ask_predictions = FALSE)
+  join(con, id, paste0("Student ", seq_len(n)))
+  sl_start_game(con, id, seed = 1)
+  id
+}
+.sf_score <- function(con, id, price) {
+  pl <- sl_players(con, id); r <- sl_session(con, id)$current_round
+  for (i in seq_len(nrow(pl))) {
+    p <- if (is.function(price)) price(pl[i, ], r) else price
+    if (!is.na(p)) sl_submit(con, id, pl$player_id[i], r, p)
+  }
+  sl_score_round(con, id)
+}
+
+test_that("C14: the slide caption's two biggest cuts must really be the two biggest cuts", {
+  con <- fresh_db(); csid <- .sf_start(con, "hotelling_low", n = 6)
+  # Markets 1 and 2 meet the collusion filter, but market 3 has the largest
+  # actual cut (200 -> 0). Its rival's prior 40 is below NE.
+  .sf_score(con, csid, function(p, r) {
+    if (p$market_id < 3) 100 else if (p$firm_label == "Firm A") 200 else 40
+  })
+  sl_advance_round(con, csid)
+  .sf_score(con, csid, function(p, r) {
+    if (p$market_id == 1) 90 else if (p$market_id == 2) 95 else 0
+  })
+  sl_end_early(con, csid)
+  figure <- slide_figures_build(con)$hotelling_low_last_round_cuts
+  # The caption must not call the displayed markets the "biggest price cuts"
+  # while leaving out market 3's $200.
+  expect_true(grepl("$200.00", figure$note, fixed = TRUE) ||
+                !grepl("biggest price cut", figure$note, fixed = TRUE))
+  expect_match(figure$note, "Not shown: a bigger cut of $200.00 in market 3", fixed = TRUE)
+  expect_match(figure$note, "after both firms had priced above the Nash price", fixed = TRUE)
+})
+
+test_that("C15: missing last-round prices must not make a two-round game caption say one round", {
+  con <- fresh_db(); csid <- .sf_start(con, "hotelling_low")
+  .sf_score(con, csid, 150); sl_advance_round(con, csid)
+  sl_score_round(con, csid); sl_end_early(con, csid)
+  figure <- slide_figures_build(con)$hotelling_low_last_round_cuts
+  expect_false(grepl("the game has one round", figure$note, fixed = TRUE))
+  expect_match(figure$note, "no market has prices in both of its last two rounds", fixed = TRUE)
 })
