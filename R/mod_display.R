@@ -70,7 +70,7 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
       Rank = seq_len(nrow(lb)),
       Firm = if (dd$anon) sprintf("Market %s · %s", lb$market_id, lb$firm_label)
              else lb$display_name,
-      Profit = vapply(lb$total_profit, money0, ""),
+      Profit = vapply(lb$total_profit, money2, ""),
       check.names = FALSE)
   }, striped = TRUE, width = "100%")
 

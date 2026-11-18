@@ -1,10 +1,6 @@
 # Small shared UI helpers (plain Shiny tags — no bslib version surprises).
 
-money0 <- function(x) {
-  x <- as.numeric(x)
-  ifelse(is.na(x), "—", paste0("$", formatC(x, format = "f", digits = 0, big.mark = ",")))
-}
-# Prices show to the cent, so a student who types $19.50 sees $19.50.
+# Prices and profits show to the cent, so a student who types $19.50 sees $19.50.
 money2 <- function(x) {
   x <- as.numeric(x)
   ifelse(is.na(x), "—", paste0("$", formatC(x, format = "f", digits = 2, big.mark = ",")))

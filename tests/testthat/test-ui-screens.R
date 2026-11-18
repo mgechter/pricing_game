@@ -14,9 +14,9 @@ renders <- function(tag) {
   expect_gt(nchar(h), 20)
 }
 
-test_that("prices show to the cent, profits to the dollar", {
-  expect_equal(money2(c(19.5, 40, 1234.567, NA)), c("$19.50", "$40.00", "$1,234.57", "—"))
-  expect_equal(money0(c(19.5, 1641.6)), c("$20", "$1,642"))
+test_that("money shows to the cent", {
+  expect_equal(money2(c(19.5, 40, 1234.567, 1641.6, NA)),
+               c("$19.50", "$40.00", "$1,234.57", "$1,641.60", "—"))
 })
 
 test_that("every admin and player screen renders across the game lifecycle", {

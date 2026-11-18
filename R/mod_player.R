@@ -316,7 +316,7 @@ pl_result <- function(p, st, r) {
   if (isTRUE(r$no_submission == 1))
     return(pl_card(sprintf("Round %d results", rnd),
       sprintf("You didn't submit a price, so you were out of the market — no sales, $0 this round. Cumulative profit: %s.",
-              money0(r$cumulative_profit))))
+              money2(r$cumulative_profit))))
   rival_txt <- if (is.na(r$rival_price)) "no submission" else money2(r$rival_price)
   shiny::div(class = "card",
     shiny::div(class = "card-header", sprintf("Round %d results", rnd)),
@@ -324,8 +324,8 @@ pl_result <- function(p, st, r) {
       stat_block("Your price",   money2(r$price)),
       stat_block("Rival price",  rival_txt),
       stat_block("Units sold",   num1(r$quantity)),
-      stat_block("Round profit", money0(r$profit)),
-      shiny::p(class = "pg-muted", sprintf("Cumulative profit: %s", money0(r$cumulative_profit))),
+      stat_block("Round profit", money2(r$profit)),
+      shiny::p(class = "pg-muted", sprintf("Cumulative profit: %s", money2(r$cumulative_profit))),
       shiny::p("Waiting for the next round…")))
 }
 
@@ -336,13 +336,13 @@ pl_finished <- function(p, st) {
     Round        = mine$round,
     `Your price` = vapply(mine$price, money2, ""),
     `Rival price`= vapply(mine$rival_price, money2, ""),
-    Profit       = vapply(mine$profit, money0, ""),
-    Cumulative   = vapply(mine$cumulative_profit, money0, ""),
+    Profit       = vapply(mine$profit, money2, ""),
+    Cumulative   = vapply(mine$cumulative_profit, money2, ""),
     check.names = FALSE)
   total <- if (nrow(mine)) max(mine$cumulative_profit) else 0
   shiny::div(class = "card",
     shiny::div(class = "card-header", "Game over"),
     shiny::div(class = "card-body",
-      shiny::div(class = "pg-big", sprintf("Total profit: %s", money0(total))),
+      shiny::div(class = "pg-big", sprintf("Total profit: %s", money2(total))),
       html_table(tbl)))
 }

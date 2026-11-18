@@ -255,11 +255,11 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
                                           paste0("“", fr$rationale, "”"), ""),
                  check.names = FALSE) },
     striped = TRUE, width = "100%")
-  signed <- function(x) sprintf("%s%s", if (x >= 0) "+" else "-", money0(abs(x)))
+  signed <- function(x) sprintf("%s%s", if (x >= 0) "+" else "-", money2(abs(x)))
   output$db_lb_indiv <- shiny::renderTable({
     d <- shiny::req(dbrief()); lb <- dbf_leaderboards(d)$individuals
     data.frame(Player = lb$display_name, Market = lb$market_id, Firm = lb$firm_label,
-               `Total profit` = vapply(lb$total_profit, money0, ""),
+               `Total profit` = vapply(lb$total_profit, money2, ""),
                `vs. all-NE`        = vapply(lb$vs_ne, signed, ""),
                `vs. all-collude`   = vapply(lb$vs_collusive, signed, ""),
                check.names = FALSE)
@@ -267,7 +267,7 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
   output$db_lb_mkt <- shiny::renderTable({
     d <- shiny::req(dbrief()); lb <- dbf_leaderboards(d)$markets
     data.frame(Market = lb$market_id, `Firm A` = lb$`Firm A`, `Firm B` = lb$`Firm B`,
-               `Market profit` = vapply(lb$market_profit, money0, ""), check.names = FALSE)
+               `Market profit` = vapply(lb$market_profit, money2, ""), check.names = FALSE)
   }, striped = TRUE, width = "100%")
 
   db_pred <- shiny::reactive({ d <- dbrief(); if (is.null(d)) NULL else dbf_predictions(d) })
@@ -469,7 +469,7 @@ ad_market_table <- function(st) {
     "—"
   }
   profit_of <- function(id) { v <- res$profit[res$player_id == id]
-    if (length(v)) money0(v) else "" }
+    if (length(v)) money2(v) else "" }
   why_of <- function(id) {
     v <- sub$rationale[sub$player_id == id]
     if (!length(v) || is.na(v[1]) || !nzchar(trimws(v[1]))) return("")
@@ -572,7 +572,7 @@ ad_finished <- function(ns, st) {
   tot <- stats::aggregate(profit ~ display_name, res, sum)
   tot <- tot[order(-tot$profit), ]
   lb  <- data.frame(Player = tot$display_name,
-                    `Total profit` = vapply(tot$profit, money0, ""),
+                    `Total profit` = vapply(tot$profit, money2, ""),
                     check.names = FALSE)
   shiny::div(class = "card",
     shiny::div(class = "card-header",

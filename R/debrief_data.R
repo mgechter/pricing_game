@@ -93,8 +93,7 @@ dbf_flags <- function(d, top_n = 2L) {
   res <- d$results
   ne  <- d$benchmarks$ne %||% 0
   if (!nrow(res)) return(.flags_empty())
-  m0 <- function(x) formatC(x, format = "f", digits = 0, big.mark = ",")   # profits
-  m2 <- function(x) formatC(x, format = "f", digits = 2, big.mark = ",")   # prices
+  m2 <- function(x) formatC(x, format = "f", digits = 2, big.mark = ",")   # to the cent
   out <- list()
 
   swing <- res |>
@@ -110,7 +109,7 @@ dbf_flags <- function(d, top_n = 2L) {
       round = swing$round, firm_label = swing$firm_label, who = swing$display_name,
       detail = sprintf("%s's round profit %s $%s vs the round before",
                        swing$display_name,
-                       ifelse(swing$dp >= 0, "jumped", "fell"), m0(abs(swing$dp))),
+                       ifelse(swing$dp >= 0, "jumped", "fell"), m2(abs(swing$dp))),
       score = swing$score)
   }
 
