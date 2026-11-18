@@ -2473,7 +2473,7 @@
   },
   "files": {
     "app.R": {
-      "checksum": "372a337d0a4c75d44aff0440c0268560"
+      "checksum": "edd65a8481f82b35de322a37ba9e143d"
     },
     "config/games.yaml": {
       "checksum": "40a2ece91e982b3cfe3995c505257e81"
@@ -2500,10 +2500,10 @@
       "checksum": "817b50fe08ffd3a5f40ae94f075c34af"
     },
     "R/debrief_data.R": {
-      "checksum": "22d6578b0f106f3326fdc8f066d1b183"
+      "checksum": "a7dccebfa2944ce372346f20819a5fe6"
     },
     "R/debrief_plots.R": {
-      "checksum": "348c0022a0c67b120d5d5516dcc0201f"
+      "checksum": "ee341856ed2465b35e9cfbf60c2edf3e"
     },
     "R/engine/demand.R": {
       "checksum": "7305de027a7cbbda81a4775906effa66"
@@ -2530,7 +2530,7 @@
       "checksum": "010afafb87bdd903b7723640fcb1dad2"
     },
     "R/mod_admin.R": {
-      "checksum": "2615645fd2db29264eef4c86a90c2d4a"
+      "checksum": "cff0fb81732352e5dae69e82b6eaac8a"
     },
     "R/mod_display.R": {
       "checksum": "cce16588fdb9cd5e67f2ce3c9b938e30"
@@ -2543,6 +2543,9 @@
     },
     "R/session_logic.R": {
       "checksum": "3d7e5c512b3a097fe7b02fb8e9e9331d"
+    },
+    "R/slide_figures.R": {
+      "checksum": "0b9db718370c9ea35cad1ea20558bbc9"
     },
     "R/ui_helpers.R": {
       "checksum": "6efb9eccc58a3ad4ce2e0e6603698120"
@@ -2575,7 +2578,7 @@
       "checksum": "17312f2e72f2548f0711d8adabaaaf61"
     },
     "tests/testthat/test-debrief.R": {
-      "checksum": "535cdddf2768f71c19fe3d972a0a3bf7"
+      "checksum": "9312b0f0392159993da6043e6cada41e"
     },
     "tests/testthat/test-demand.R": {
       "checksum": "6442d6c6526f1b2e1a366f77d0899b76"
@@ -2595,8 +2598,11 @@
     "tests/testthat/test-session-logic.R": {
       "checksum": "1f18ed07998f73ff255acb12be3cea1c"
     },
+    "tests/testthat/test-slide-figures.R": {
+      "checksum": "aab1242c2ddc26da49975b8721287044"
+    },
     "tests/testthat/test-ui-screens.R": {
-      "checksum": "0bafbd88d8d142722c9fdbecf079b64a"
+      "checksum": "35f92fb7f98537f8689e581f1b3a7530"
     }
   },
   "users": null
