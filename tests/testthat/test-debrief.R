@@ -153,6 +153,26 @@ test_that("debrief_write_figs writes the standard PNG set", {
   expect_true(any(grepl("price_paths\\.png$", files)))
 })
 
+test_that("debrief_write_figs writes one best-response PNG per flagged firm-round", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  join(con, sid, sprintf("P%d", 1:4)); sl_start_game(con, sid, seed = 1)
+  # both firms of every market swing hard in round 2, so several flags share a
+  # market and round (the case that used to overwrite one PNG with another)
+  play_out(con, sid, function(r, f, p) if (r == 2) (if (f == "Firm A") 5 else 45) else 30)
+  d  <- dbf_load(con, sid)
+  fr <- dbf_flags(d)
+  fr <- fr[fr$firm_label %in% c("Firm A", "Firm B"), ]
+  want <- nrow(unique(fr[c("market_id", "round", "firm_label")]))
+  files <- debrief_write_figs(d, tempfile("figs_"))
+  br <- files[grepl("^best_response_", basename(files))]
+  expect_true(want >= 2)
+  expect_length(br, want)
+  expect_false(anyDuplicated(basename(files)) > 0)
+  expect_true(all(file.exists(br)))
+  expect_true(all(grepl("_[AB]\\.png$", br)))
+})
+
 test_that("dbf_load_bundle round-trips through the export files", {
   con <- fresh_db()
   sid <- sl_create_session(con, "hotelling_low", GAMES_PATH)

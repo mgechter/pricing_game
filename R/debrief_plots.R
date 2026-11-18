@@ -164,8 +164,12 @@ debrief_write_figs <- function(d, dir, width = 9, height = 5.5, dpi = 200) {
   )
   flags <- dbf_flags(d)
   flags <- flags[flags$firm_label %in% c("Firm A", "Firm B"), , drop = FALSE]
+  # one PNG per (market, round, firm): two flags on the same firm-round draw the
+  # same figure, and a name without the firm let Firm A's and Firm B's overwrite
+  flags <- flags[!duplicated(flags[c("market_id", "round", "firm_label")]), , drop = FALSE]
   for (i in seq_len(nrow(flags))) {
-    nm <- sprintf("best_response_m%s_r%s", flags$market_id[i], flags$round[i])
+    nm <- sprintf("best_response_m%s_r%s_%s", flags$market_id[i], flags$round[i],
+                  sub("^Firm ", "", flags$firm_label[i]))
     files <- c(files, tryCatch(
       save(nm, plot_best_response(d, flags$market_id[i], flags$round[i], flags$firm_label[i]),
            w = 8, h = 4.5),
