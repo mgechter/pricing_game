@@ -240,6 +240,19 @@ test_that("predictions gate round 1 and lift when answered or forced", {
   expect_error(sl_set_prediction(con, sid, ids[1], "own_r1", "9"), "before round 1")
 })
 
+test_that("a session can skip the prediction questions", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH, ask_predictions = FALSE)
+  ids <- join(con, sid, c("Ada", "Bo", "Cy", "Di"))
+  sl_start_game(con, sid, seed = 1)
+  s <- sl_session(con, sid); g <- sl_game(s)
+  expect_gt(length(game_required_qids(g)), 0)                  # the game has questions...
+  expect_false(sl_player_predicts_pending(con, s, g, ids[1]))  # ...but nobody is held back
+  expect_false(sl_prediction_status(con, sid)$has_questions)   # and the admin note is hidden
+  # the default still asks, as before
+  expect_equal(sl_session(con, sl_create_session(con, "bertrand", GAMES_PATH))$ask_predictions, 1)
+})
+
 test_that("confirm is sticky and round status separates priced vs confirmed", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)

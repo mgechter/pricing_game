@@ -27,7 +27,8 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     shiny::showNotification(conditionMessage(e), type = "error"))
 
   shiny::observeEvent(input$create,
-    guard(sl_create_session(con, input$game_id, games_path, label = input$new_label)))
+    guard(sl_create_session(con, input$game_id, games_path, label = input$new_label,
+                            ask_predictions = isTRUE(input$new_pred))))
 
   shiny::observeEvent(input$start, {
     st <- state(); shiny::req(st)
@@ -360,6 +361,8 @@ ad_create <- function(ns, choices) shiny::div(class = "card",
   shiny::div(class = "card-body",
     shiny::selectInput(ns("game_id"), "Game", choices = choices),
     shiny::textInput(ns("new_label"), "Label (optional)", placeholder = "e.g. Section A — Bertrand"),
+    shiny::checkboxInput(ns("new_pred"),
+      "Ask the game's prediction questions before round 1", TRUE),
     shiny::fluidRow(
       shiny::column(4, shiny::numericInput(ns("new_timer"),
         "Round timer (seconds, 0 = off)", value = 0, min = 0, step = 15)),

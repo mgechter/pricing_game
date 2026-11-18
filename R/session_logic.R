@@ -6,15 +6,20 @@
 
 # --- session lifecycle --------------------------------------------------------
 
-sl_create_session <- function(con, game_id, games_path = "config/games.yaml", label = NULL) {
+# ask_predictions = FALSE skips the game's pre-game prediction questions for
+# this session (students go straight to round 1).
+sl_create_session <- function(con, game_id, games_path = "config/games.yaml", label = NULL,
+                              ask_predictions = TRUE) {
   game <- resolve_benchmarks(get_game(game_id, games_path))
   cfg  <- jsonlite::toJSON(game, auto_unbox = TRUE, null = "null", digits = NA)
   label <- trimws(label %||% "")
   db_run(con,
-    "INSERT INTO sessions (game_id, label, phase, current_round, n_rounds, config_json, created_at)
-     VALUES (?, ?, 'lobby', 0, ?, ?, ?)",
+    "INSERT INTO sessions (game_id, label, phase, current_round, n_rounds, config_json,
+                           ask_predictions, created_at)
+     VALUES (?, ?, 'lobby', 0, ?, ?, ?, ?)",
     list(game_id, if (nzchar(label)) label else NA_character_,
-         as.integer(game$rounds), as.character(cfg), now_epoch()))
+         as.integer(game$rounds), as.character(cfg),
+         as.integer(isTRUE(ask_predictions)), now_epoch()))
   sid <- db_last_id(con)
   meta_set(con, "active_session_id", sid)
   sid
@@ -207,6 +212,7 @@ sl_predictions <- function(con, session_id, player_id = NULL) {
 sl_player_predicts_pending <- function(con, s, game, player_id) {
   if (is.null(s) || s$phase != "open" || (s$current_round %||% 0) != 1) return(FALSE)
   if (isTRUE((s$predictions_forced %||% 0) == 1)) return(FALSE)
+  if (!sl_asks_predictions(s)) return(FALSE)
   req <- game_required_qids(game)
   if (!length(req)) return(FALSE)
   done <- sl_predictions(con, s$session_id, player_id)$qid
@@ -225,13 +231,16 @@ sl_prediction_status <- function(con, session_id) {
   done <- vapply(expected$player_id, function(pid)
     length(req) == 0 || all(req %in% ans$qid[ans$player_id == pid]), logical(1))
   list(
-    has_questions = length(req) > 0,
+    has_questions = length(req) > 0 && sl_asks_predictions(s),
     forced        = isTRUE((s$predictions_forced %||% 0) == 1),
     n_expected    = nrow(expected),
     n_done        = sum(done),
     pending       = expected$display_name[!done]
   )
 }
+
+# Sessions created before the option existed have no value and ask, as before.
+sl_asks_predictions <- function(s) !isTRUE((s$ask_predictions %||% 1) == 0)
 
 sl_force_predictions <- function(con, session_id) {
   db_run(con, "UPDATE sessions SET predictions_forced = 1 WHERE session_id = ?",

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   anonymous        INTEGER NOT NULL DEFAULT 0,        -- hide names on projector / debrief
   projector_view   TEXT    NOT NULL DEFAULT 'summary', -- 'summary' | 'scoreboard' | 'detail'
   predictions_forced INTEGER NOT NULL DEFAULT 0,      -- admin let everyone past the prediction gate
+  ask_predictions  INTEGER NOT NULL DEFAULT 1,        -- 0 = skip the pre-game prediction questions
   created_at       REAL    NOT NULL
 );
 CREATE TABLE IF NOT EXISTS players (
@@ -83,7 +84,8 @@ DB_MIGRATIONS <- c(
   "ALTER TABLE sessions ADD COLUMN anonymous INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE sessions ADD COLUMN projector_view TEXT NOT NULL DEFAULT 'summary'",
   "ALTER TABLE submissions ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 0",
-  "ALTER TABLE sessions ADD COLUMN predictions_forced INTEGER NOT NULL DEFAULT 0"
+  "ALTER TABLE sessions ADD COLUMN predictions_forced INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE sessions ADD COLUMN ask_predictions INTEGER NOT NULL DEFAULT 1"
 )
 
 db_connect <- function(path) {
