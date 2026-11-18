@@ -331,7 +331,9 @@ sl_round_status <- function(con, session_id) {
   if (!is.null(sub)) return(list(price = sub$price, missing = FALSE))
   if (isTRUE(carry_forward)) {
     pp <- .prev_price(con, session_id, player_id, round)
-    if (!is.null(pp)) {
+    # a student who also missed the round before has no price to carry (their
+    # result row holds NA): score them as a no-show, as without carry-forward
+    if (length(pp) == 1 && is.finite(pp)) {
       db_run(con,
         "INSERT INTO submissions (session_id, round, player_id, price, rationale, carried, submitted_at)
          VALUES (?, ?, ?, ?, '(carried forward)', 1, ?)
@@ -387,6 +389,8 @@ sl_score_round <- function(con, session_id, carry_forward = FALSE) {
 
   scored <- 0L; skipped <- character(0); no_shows <- character(0)
 
+  # one transaction, so an error part-way leaves no market half-scored
+  DBI::dbWithTransaction(con, {
   for (mk in sort(unique(real$market_id))) {
     firms <- real[real$market_id == mk, , drop = FALSE]
     if (nrow(firms) != 2) { skipped <- c(skipped, sprintf("market %s", mk)); next }
@@ -427,6 +431,7 @@ sl_score_round <- function(con, session_id, carry_forward = FALSE) {
   }
 
   db_run(con, "UPDATE sessions SET phase = 'scored' WHERE session_id = ?", list(session_id))
+  })
   invisible(list(markets_scored = scored, skipped = skipped, no_shows = unique(no_shows)))
 }
 

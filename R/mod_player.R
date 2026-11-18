@@ -85,15 +85,24 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
   })
 
   # Auto-save the box as they type (debounced) so a typed-but-unsent price is
-  # never scored as a no-show. Does not confirm.
-  draft <- shiny::debounce(shiny::reactive(list(p = input$price, r = input$rationale)), 1200)
+  # never scored as a no-show. Does not confirm. Each draft remembers the
+  # session and round it was typed in (read when the box changed, not when the
+  # debounce fires), so a draft still pending when the instructor scores and
+  # moves on is dropped rather than saved under the next round.
+  draft <- shiny::debounce(shiny::reactive({
+    s <- shiny::isolate(state())$session
+    list(p = input$price, r = input$rationale,
+         sid = s$session_id %||% NA, round = s$current_round %||% NA)
+  }), 1200)
   shiny::observeEvent(draft(), {
     st <- state(); pl <- me()
     if (is.null(st) || is.null(pl) || st$session$phase != "open") return()
     dd    <- draft()
-    price <- suppressWarnings(as.numeric(dd$p))
+    if (!isTRUE(dd$sid == st$session$session_id) ||
+        !isTRUE(dd$round == st$session$current_round)) return()
+    price <- pl_price_value(dd$p)
     sub   <- shiny::isolate(my_submission())
-    if (is.na(price) || price < 0) {                        # no usable price yet
+    if (is.na(price)) {                                     # no usable price yet
       if (is.null(sub)) return()                            # nothing to update
       price <- sub$price[1]                                 # keep price, save rationale edit
     }
@@ -176,20 +185,24 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
 
   # In the last few seconds, auto-send whatever valid price is in the box so a
   # student who's typed a number but not hit Submit isn't scored as a no-show.
-  auto_done <- shiny::reactiveVal(-1L)
+  # The once-per-round latch is keyed by session, round and the round's start
+  # time, so a reset (which replays round 1) or another session gets its own.
+  auto_done <- shiny::reactiveVal("")
   shiny::observe({
     shiny::invalidateLater(1000)
     st <- state(); p <- me()
     if (is.null(st) || is.null(p)) return()
     s <- st$session
-    if (s$phase != "open" || auto_done() == s$current_round) return()
+    key <- round_instance_key(s)
+    if (s$phase != "open" || identical(auto_done(), key)) return()
     tl <- sl_time_left(s)
     if (is.na(tl) || tl > 5) return()                       # only the last ~5 s
-    price <- suppressWarnings(as.numeric(shiny::isolate(input$price)))
-    if (is.na(price) || price < 0) return()                 # nothing usable typed
+    # a box never shown (still on the prediction screen, say) has no value at all
+    price <- pl_price_value(shiny::isolate(input$price))
+    if (is.na(price)) return()                              # nothing usable typed
     sub <- shiny::isolate(my_submission())
     if (!is.null(sub) && isTRUE(sub$price[1] == price)) {    # already sent this value
-      auto_done(s$current_round); return()
+      auto_done(key); return()
     }
     ok <- tryCatch({
       sl_submit(con, s$session_id, p$player_id, s$current_round, price,
@@ -197,7 +210,7 @@ player_server <- function(id, con) shiny::moduleServer(id, function(input, outpu
       TRUE
     }, error = function(e) FALSE)
     if (ok) {
-      auto_done(s$current_round)
+      auto_done(key)
       shiny::showNotification("Time's up — your price was submitted automatically.",
                               type = "message", duration = 4)
     }

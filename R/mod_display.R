@@ -31,14 +31,18 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
       if (is.null(s)) NULL else sl_load_state(con, s$session_id)
     })
 
-  # Reload the debrief data only when the *scored* picture changes (round scored,
-  # phase change, anon / view toggled) — not on every submission.
+  # Reload the debrief data only when the *scored* picture changes (round scored
+  # or re-scored, phase change, anon / view toggled) — not on every submission.
+  # The latest scoring time is in the key because a re-score ("carrying the
+  # no-shows' prices forward") changes profits without changing the row count.
   d_key <- shiny::reactiveVal("")
   shiny::observe({
     st <- state()
+    scored_at <- if (!is.null(st) && nrow(st$results))
+      max(st$results$computed_at %||% 0, na.rm = TRUE) else 0
     k <- if (is.null(st)) "none" else paste(
       st$session$session_id, st$session$phase, st$session$current_round,
-      nrow(st$results), st$session$anonymous %||% 0,
+      nrow(st$results), format(scored_at, digits = 15), st$session$anonymous %||% 0,
       st$session$projector_view %||% "summary")
     if (!identical(k, shiny::isolate(d_key()))) d_key(k)
   })

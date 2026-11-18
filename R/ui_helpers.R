@@ -10,7 +10,19 @@ num1 <- function(x) {
   ifelse(is.na(x), "—", formatC(x, format = "f", digits = 1, big.mark = ","))
 }
 
-fmt_time <- function(epoch) format(as.POSIXct(as.numeric(epoch), origin = "1970-01-01"),
+# A price box's value as one usable price, or NA. A box the browser never sent
+# arrives as NULL (as.numeric() gives a zero-length vector); a cleared box as NA.
+pl_price_value <- function(x) {
+  p <- suppressWarnings(as.numeric(x))
+  if (length(p) != 1 || !is.finite(p) || p < 0) NA_real_ else p
+}
+
+# Identifies one playing of one round: the same round number after a reset, or
+# in another session, is a different instance (it starts at a different time).
+round_instance_key <- function(s)
+  paste(s$session_id %||% NA, s$current_round %||% NA, s$round_started_at %||% NA, sep = "/")
+
+fmt_time <- function(epoch)format(as.POSIXct(as.numeric(epoch), origin = "1970-01-01"),
                                    "%H:%M:%S")
 
 # Render a data.frame as a Bootstrap table inside a renderUI() block.

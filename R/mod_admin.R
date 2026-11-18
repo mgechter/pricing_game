@@ -360,13 +360,16 @@ admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(i
     guard(sl_set_timer(con, sid(), input$timer_now %||% 0, auto_advance = isTRUE(input$auto_now)))
   }, ignoreInit = TRUE)
 
-  last_auto <- shiny::reactiveVal(-1L)
+  # once per playing of a round: keyed by session, round and the round's start
+  # time, so round 1 replayed after a reset, or another session, scores again
+  last_auto <- shiny::reactiveVal("")
   shiny::observe({
     shiny::invalidateLater(1000)
     st <- shiny::isolate(state()); if (is.null(st)) return()
     s <- st$session
-    if (sl_should_auto_score(s) && last_auto() != s$current_round) {
-      last_auto(s$current_round)
+    key <- round_instance_key(s)
+    if (sl_should_auto_score(s) && !identical(last_auto(), key)) {
+      last_auto(key)
       guard({
         sl_score_round(con, sid(), carry_forward = carry_rv())
         if (isTRUE((s$auto_advance %||% 0) == 1)) {
