@@ -93,7 +93,9 @@ ignored). If it ever gets orphaned: `kill $(lsof -ti tcp:3838)`.
 Put `?mode=display` on the projector for a live big-screen view (round, timer,
 submission count, leaderboard, and a chart). The **Projector view** setting
 chooses the chart — *Summary* (one average-price line, the default), *Scoreboard
-only*, or *Detail* (per-market paths; busy past ~4 teams).
+only*, *Detail* (per-market paths; busy past ~4 teams), or *Price history* (a
+table of every player's price in each scored round, rivals on adjacent rows, in
+place of the chart and leaderboard).
 
 Other admin tabs:
 

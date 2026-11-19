@@ -466,7 +466,8 @@ ad_create <- function(ns, choices) shiny::div(class = "card",
     shiny::selectInput(ns("new_proj"), "Projector view",
       choices = c("Summary — average price + leaderboard" = "summary",
                   "Scoreboard only" = "scoreboard",
-                  "Detail — per-market price paths (busy with many teams)" = "detail"),
+                  "Detail — per-market price paths (busy with many teams)" = "detail",
+                  "Price history — every player's price in each round" = "history"),
       selected = "summary"),
     shiny::p(class = "pg-muted", style = "margin-top:-.5rem;font-size:.9rem;",
       "With a timer set, the round closes and scores itself at 0:00; you click Next round. ",
@@ -618,7 +619,8 @@ ad_round <- function(ns, st, phase, carry = FALSE) {
         value = isTRUE((s$auto_advance %||% 0) == 1)),
       shiny::selectInput(ns("proj_view"), "Projector view",
         choices = c(Summary = "summary", `Scoreboard only` = "scoreboard",
-                    `Detail (per-market paths)` = "detail"),
+                    `Detail (per-market paths)` = "detail",
+                    `Price history` = "history"),
         selected = s$projector_view %||% "summary")))
   round_res <- st$results[st$results$round == s$current_round, , drop = FALSE]
   had_noshow <- any(round_res$no_submission == 1)

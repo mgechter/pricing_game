@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   round_seconds    INTEGER NOT NULL DEFAULT 0,        -- countdown length; 0 = no timer
   auto_advance     INTEGER NOT NULL DEFAULT 0,        -- also advance after the timer auto-scores
   anonymous        INTEGER NOT NULL DEFAULT 0,        -- hide names on projector / debrief
-  projector_view   TEXT    NOT NULL DEFAULT 'summary', -- 'summary' | 'scoreboard' | 'detail'
+  projector_view   TEXT    NOT NULL DEFAULT 'summary', -- 'summary' | 'scoreboard' | 'detail' | 'history'
   predictions_forced INTEGER NOT NULL DEFAULT 0,      -- admin let everyone past the prediction gate
   ask_predictions  INTEGER NOT NULL DEFAULT 1,        -- 0 = skip the pre-game prediction questions
   created_at       REAL    NOT NULL

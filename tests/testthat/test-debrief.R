@@ -21,6 +21,70 @@ test_that("dbf_load returns the expected shape", {
   expect_true(all(c("round", "market_id", "firm_label", "price", "profit") %in% names(d$results)))
 })
 
+test_that("dbf_price_history: a row per player, rivals adjacent, a no-show blank", {
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  nms <- c("Ann", "Ben", "Cy", "Di", "Ed")            # five: one is a shadow
+  join(con, sid, nms); sl_start_game(con, sid, seed = 1)
+  pl <- sl_players(con, sid); pl <- pl[!is.na(pl$market_id), ]
+  gone <- pl$player_id[pl$firm_label == "Firm B"][1]  # misses round 1
+  for (i in seq_len(nrow(pl))) if (pl$player_id[i] != gone)
+    sl_submit(con, sid, pl$player_id[i], 1, 40 + pl$player_id[i] / 100)
+  sl_score_round(con, sid, carry_forward = FALSE)
+  sl_advance_round(con, sid)
+  play_out(con, sid, function(r, f, p) 30 + r + p / 100)
+
+  d <- dbf_load(con, sid)
+  h <- dbf_price_history(d)
+  expect_equal(names(h), c("Market", "Player", sprintf("Round %d", 1:5)))
+  expect_equal(nrow(h), 5)
+  hn <- sub(" (shadow)", "", h$Player, fixed = TRUE)
+  expect_setequal(hn, nms)
+  # rows run by market, and within a market Firm A, then Firm B, then the shadow
+  firm <- pl$firm_label[match(hn, pl$display_name)]
+  expect_equal(grepl("(shadow)", h$Player, fixed = TRUE), firm == "Shadow")
+  mk   <- as.integer(h$Market)
+  expect_false(is.unsorted(mk))
+  for (m in unique(mk))
+    expect_false(is.unsorted(match(firm[mk == m], c("Firm A", "Firm B", "Shadow"))))
+  expect_true("Shadow" %in% firm)
+  # the no-show's round 1 is blank; every other cell is the scored price
+  who <- pl$display_name[pl$player_id == gone]
+  expect_true(is.na(h[hn == who, "Round 1"]))
+  for (i in seq_len(nrow(pl))) {
+    row <- h[hn == pl$display_name[i], ]
+    expect_equal(nrow(row), 1)
+    if (pl$player_id[i] != gone)
+      expect_equal(row[["Round 1"]], 40 + pl$player_id[i] / 100)
+    expect_equal(row[["Round 3"]], 33 + pl$player_id[i] / 100)
+  }
+  # hidden names: firm labels in their place, and no name anywhere
+  ha <- dbf_price_history(d, anon = TRUE)
+  expect_equal(ha$Player, firm)
+  expect_false(any(unlist(ha) %in% nms))
+  # nothing scored yet: no table
+  d0 <- d; d0$results <- d$results[0, ]
+  expect_null(dbf_price_history(d0))
+})
+
+test_that("the projector's Price history view shows the table in place of chart and leaderboard", {
+  for (.f in c("ui_helpers.R", "mod_display.R")) source(file.path(root, "R", .f))
+  con <- fresh_db()
+  sid <- sl_create_session(con, "bertrand", GAMES_PATH)
+  join(con, sid, c("Ann", "Ben")); sl_start_game(con, sid, seed = 1)
+  play_out(con, sid, 25)
+  sl_set_projector(con, sid, "history")
+  shiny::testServer(display_server, args = list(con = con), {
+    session$elapse(1100)
+    scr <- as.character(output$screen$html)
+    expect_match(scr, "Prices by round", fixed = TRUE)
+    expect_no_match(scr, "Leaderboard", fixed = TRUE)
+    expect_match(output$history, "$25.00", fixed = TRUE)
+    expect_match(output$history, "Ann", fixed = TRUE)
+    expect_match(output$history, "Round 5", fixed = TRUE)
+  })
+})
+
 test_that("dbf_flags catches tacit collusion and an off-best-response move", {
   con <- fresh_db()
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)   # NE = 0

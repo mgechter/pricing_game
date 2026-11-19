@@ -347,6 +347,36 @@ dbf_prediction_table <- function(d) {
   w[order(-w$total_profit), ]
 }
 
+# The projector's "Price history" view: one row per player and one column per
+# scored round, the price each player was scored at (as the 2025 Google Sheet's
+# Pricing tab showed every student's prices). Rows run by market, Firm A then
+# Firm B then any shadow, so rivals sit on adjacent rows. A no-show's round is
+# NA. A shadow's name carries "(shadow)", since its market then has three rows.
+# `anon` puts the firm label where the name would be. The projector formats the
+# prices (money2).
+dbf_price_history <- function(d, anon = FALSE) {
+  res <- d$results
+  if (is.null(res) || !nrow(res)) return(NULL)
+  rounds <- sort(unique(res$round))
+  keys <- res[!duplicated(res$player_id),
+              c("player_id", "market_id", "firm_label", "display_name"), drop = FALSE]
+  keys <- keys[order(keys$market_id,
+                     match(keys$firm_label, c("Firm A", "Firm B", "Shadow")),
+                     keys$player_id), , drop = FALSE]
+  out <- data.frame(Market = as.character(keys$market_id),
+                    Player = if (anon) keys$firm_label
+                             else ifelse(keys$firm_label == "Shadow",
+                                         paste(keys$display_name, "(shadow)"),
+                                         keys$display_name),
+                    stringsAsFactors = FALSE)
+  for (r in rounds) {
+    rr <- res[res$round == r, , drop = FALSE]
+    out[[sprintf("Round %d", r)]] <- rr$price[match(keys$player_id, rr$player_id)]
+  }
+  rownames(out) <- NULL
+  out
+}
+
 dbf_leaderboards <- function(d) {
   res <- d$results
   # the rounds scored so far: a game still running (or ended early) is compared

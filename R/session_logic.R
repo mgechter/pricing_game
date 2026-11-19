@@ -175,7 +175,7 @@ sl_set_anonymous <- function(con, session_id, anonymous) {
 }
 
 sl_set_projector <- function(con, session_id, view) {
-  view <- match.arg(as.character(view), c("summary", "scoreboard", "detail"))
+  view <- match.arg(as.character(view), c("summary", "scoreboard", "detail", "history"))
   db_run(con, "UPDATE sessions SET projector_view = ? WHERE session_id = ?",
          list(view, session_id))
   invisible(TRUE)

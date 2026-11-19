@@ -303,6 +303,8 @@ test_that("anonymous + projector-view settings round-trip", {
   expect_equal(sl_session(con, sid)$projector_view, "summary")   # default
   sl_set_projector(con, sid, "detail")
   expect_equal(sl_session(con, sid)$projector_view, "detail")
+  sl_set_projector(con, sid, "history")
+  expect_equal(sl_session(con, sid)$projector_view, "history")
   expect_error(sl_set_projector(con, sid, "nonsense"))
 })
 

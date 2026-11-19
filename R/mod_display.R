@@ -5,6 +5,8 @@
 #   summary     average price per round + leaderboard   (default)
 #   scoreboard  leaderboard only
 #   detail      per-market price paths + leaderboard     (busy with many teams)
+#   history     every player's price in each scored round, as a table
+#               (the 2025 Google Sheet's Pricing tab), rivals on adjacent rows
 #
 # The chart and leaderboard update ONLY when a round is scored — not as students
 # submit. The submission counter and the countdown stay live.
@@ -14,7 +16,8 @@ display_ui <- function(id) {
   shiny::div(class = "pg-wide", style = "max-width:1400px;",
     shiny::tags$style(shiny::HTML(
       ".pg-disp h1{font-size:2.6rem;margin:.2rem 0} .pg-disp h2{font-size:1.8rem;color:#495057}
-       .pg-disp table{font-size:1.3rem}")),
+       .pg-disp table{font-size:1.3rem}
+       .pg-hist table{font-size:1.15rem} .pg-hist td:nth-child(n+3),.pg-hist th:nth-child(n+3){text-align:right !important}")),
     shiny::div(class = "pg-disp", shiny::uiOutput(ns("screen"))))
 }
 
@@ -77,6 +80,12 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
       Profit = vapply(lb$total_profit, money2, ""),
       check.names = FALSE)
   }, striped = TRUE, width = "100%")
+  output$history <- shiny::renderTable({
+    dd <- shiny::req(d())
+    h <- shiny::req(dbf_price_history(dd, anon = dd$anon))
+    h[-(1:2)] <- lapply(h[-(1:2)], money2)   # "$49.99"; a no-show's round "—"
+    h
+  }, striped = TRUE, width = "100%")
 
   output$screen <- shiny::renderUI({
     st <- state()
@@ -91,6 +100,10 @@ display_server <- function(id, con) shiny::moduleServer(id, function(input, outp
       shiny::h2(sprintf("%d of %d submitted", rs$n_confirmed, rs$n_expected)),
       if (!have_results)
         shiny::h2("Results appear here once round 1 is scored.")
+      else if (identical(s$projector_view %||% "summary", "history"))
+        shiny::tagList(
+          shiny::h2("Prices by round"),
+          shiny::div(class = "pg-hist", shiny::tableOutput(ns("history"))))
       else shiny::tagList(
         if ((s$projector_view %||% "summary") != "scoreboard")
           shiny::plotOutput(ns("chart"), height = "480px"),
