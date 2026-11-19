@@ -25,7 +25,7 @@ test_that("every admin and player screen renders across the game lifecycle", {
   sid <- sl_create_session(con, "bertrand", GAMES_PATH)
   ids <- join(con, sid, c("Ada", "Boaz", "Cleo", "Dax"))
 
-  renders(ad_create(ns, names(load_games(GAMES_PATH))))
+  renders(ad_create(ns, ad_game_choices(GAMES_PATH)))
 
   renders(ad_nav(ns, "run"))
   renders(ad_nav(ns, "history"))
@@ -80,6 +80,15 @@ test_that("every admin and player screen renders across the game lifecycle", {
   mk <- sort(unique(d$results$market_id))
   html <- as.character(ad_debrief(ns, d, ss, sid, dbf_flags(d), c(mk[1], 999)))
   expect_match(html, "Markets to show", fixed = TRUE)
+})
+
+test_that("the Game menu shows each game's label, with its id as the value", {
+  ch <- ad_game_choices(GAMES_PATH)
+  expect_equal(unname(ch), names(load_games(GAMES_PATH)))
+  expect_equal(names(ch)[unname(ch) == "bertrand"], "Bertrand (homogeneous good)")
+  html <- as.character(ad_create(NS("t"), ch))
+  expect_match(html, '<option value="bertrand" selected>Bertrand (homogeneous good)</option>',
+               fixed = TRUE)
 })
 
 test_that("odd headcount: the shadow player still gets a round view", {

@@ -7,7 +7,7 @@ admin_ui <- function(id) {
 
 admin_server <- function(id, con, games_path) shiny::moduleServer(id, function(input, output, session) {
   ns <- session$ns
-  game_choices <- names(load_games(games_path))
+  game_choices <- ad_game_choices(games_path)
 
   state <- shiny::reactivePoll(1000, session,
     checkFunc = function() {
@@ -440,6 +440,13 @@ ad_nav <- function(ns, view) {
     lk("nav_history", "History", view == "history"), sep,
     lk("nav_debrief", "Debrief", view == "debrief"), sep,
     lk("nav_figures", "Slide figures", view == "figures"))
+}
+
+# The Game menu: each game's label is shown and its id is the value, since the
+# id is what a session stores and what a script picks with selectize.setValue
+ad_game_choices <- function(games_path) {
+  g <- load_games(games_path)
+  stats::setNames(names(g), vapply(g, function(x) x$label %||% x$id, character(1)))
 }
 
 ad_create <- function(ns, choices) shiny::div(class = "card",
