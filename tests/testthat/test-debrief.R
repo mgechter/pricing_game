@@ -44,16 +44,16 @@ test_that("a rival above monopoly or below NE is flagged and found", {
   d  <- dbf_load(con, sid)
   fr <- dbf_flags(d)
   hi <- fr[fr$kind == "Rival above monopoly", ]
-  expect_equal(nrow(hi), 2)                               # top_n of four rounds
+  expect_equal(nrow(hi), 2)                               # top_n of five rounds
   expect_true(all(hi$firm_label == "Firm A"))
-  expect_equal(sort(hi$round), c(3, 4))                   # Firm B's two highest prices
+  expect_equal(sort(hi$round), c(4, 5))                   # Firm B's two highest prices
   expect_match(hi$detail[1], "best response of $50.00", fixed = TRUE)
   expect_false("Rival below NE" %in% fr$kind)
 
   above <- dbf_rival_case(d, "above_monopoly")
   expect_true(above$exact)
-  expect_equal(above$firm_label, "Firm A"); expect_equal(above$round, 4)
-  expect_equal(above$rival_price, 56.1)
+  expect_equal(above$firm_label, "Firm A"); expect_equal(above$round, 5)
+  expect_equal(above$rival_price, 57.1)
   below <- dbf_rival_case(d, "below_ne")                  # no price below 0: nearest case
   expect_false(below$exact)
   expect_equal(below$rival_price, 46.4); expect_equal(below$firm_label, "Firm B")
@@ -160,7 +160,7 @@ test_that("plot builders return ggplot objects; best-response guards bad input",
 
 test_that("price paths name each pair, label the benchmarks, and draw chosen markets", {
   con <- fresh_db()
-  sid <- sl_create_session(con, "hotelling_low", GAMES_PATH)        # NE 50, monopoly 225
+  sid <- sl_create_session(con, "hotelling_low", GAMES_PATH)        # NE 50, monopoly 175
   join(con, sid, c("Ada", "Boaz", "Cleo", "Dmitri", "Esme"))         # odd -> a shadow
   sl_start_game(con, sid, seed = 1)
   play_out(con, sid, function(r, f, p) 60 + r)
@@ -174,7 +174,7 @@ test_that("price paths name each pair, label the benchmarks, and draw chosen mar
   expect_equal(sum(grepl(", shadow ", strips)), 1)
   expect_setequal(as.character(unique(p$data$firm)), c("Firm A", "Firm B", "Shadow"))
   bench <- p$layers[[2]]$data$text
-  expect_true(all(c("NE $50.00", "Monopoly $225.00") %in% bench))
+  expect_true(all(c("NE $50.00", "Monopoly $175.00") %in% bench))
 
   one <- plot_price_paths(d, markets = mks[2])
   expect_equal(unique(one$data$market_id), mks[2])
@@ -217,7 +217,7 @@ test_that("best-response figure labels each line with its value and says where t
 
 test_that("both firms of a market stack in one figure, chosen firm on top", {
   con <- fresh_db()
-  sid <- sl_create_session(con, "hotelling_low", GAMES_PATH)          # monopoly 225
+  sid <- sl_create_session(con, "hotelling_low", GAMES_PATH)          # monopoly 175
   join(con, sid, c("Ada", "Boaz", "Cleo")); sl_start_game(con, sid, seed = 1)
   play_out(con, sid, function(r, f, p) if (f == "Firm A") 230 else 110)
   d  <- dbf_load(con, sid)
@@ -228,7 +228,7 @@ test_that("both firms of a market stack in one figure, chosen firm on top", {
   strips <- levels(q$data$panel)
   expect_length(strips, 2)
   expect_match(strips[1], paste0("^", b_name, ", given "))
-  expect_match(strips[1], "above the monopoly price ($225.00)", fixed = TRUE)
+  expect_match(strips[1], "above the monopoly price ($175.00)", fixed = TRUE)
   expect_length(layer_text(q), 8)                       # four lines in each panel
   expect_error(plot_best_response(d, mk, 2, "Shadow"), "isn't available")
   expect_error(plot_best_response_pair(d, 999, 2), "isn't available")
@@ -248,7 +248,7 @@ test_that("price quartiles by round, and one market's prices and profits ranked 
   expect_equal(got$price[got$stat == "Median"], stats::median(r3))
   expect_equal(got$price[got$stat == "25th percentile"], unname(stats::quantile(r3, 0.25)))
   expect_equal(nrow(q$data), 3 * length(unique(d$results$round)))
-  expect_true(all(c("NE $100.00", "Monopoly $200.00") %in% layer_text(q)))
+  expect_true(all(c("NE $100.00", "Monopoly $150.00") %in% layer_text(q)))
 
   rk  <- dbf_market_ranks(d)
   ab  <- d$results[d$results$firm_label %in% c("Firm A", "Firm B"), ]

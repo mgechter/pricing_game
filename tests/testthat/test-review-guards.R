@@ -149,7 +149,7 @@ test_that("G7: rival finders identify the correct firm and ignore shadows and mi
   hi <- flags[flags$kind == "Rival above monopoly", ]
   expect_equal(hi$firm_label, "Firm A")
   expect_equal(hi$market_id, 1L)
-  expect_equal(hi$score, 15)
+  expect_equal(hi$score, 65)
   f <- slide_figures_build(con)$hotelling_low_rival_above_monopoly_both_firms
   expect_match(f$note, "Market 1, round 1", fixed = TRUE)
   expect_match(f$note, "$240.00", fixed = TRUE)

@@ -17,7 +17,7 @@ play_game <- function(con, game, names, price) {
 }
 
 # Three games in which each slide's case happens: a Bertrand rival above $50,
-# a t = 1 rival below $100, a t = 0.5 rival above $225 and last-round cuts.
+# a t = 1 rival below $100, a t = 0.5 rival above $175 and last-round cuts.
 three_games <- function(con) {
   list(
     old  = play_game(con, "bertrand", c("A", "B"), function(r, f, nr) 30),
@@ -35,8 +35,8 @@ test_that("every slide figure is drawn from the latest session of its game", {
   figs <- slide_figures_build(con)
   expect_named(figs, ids)
   for (x in figs) expect_s3_class(x$plot, "ggplot")
-  # sessions made without a label: "Session #2: 4 rounds scored.", never "NA"
-  expect_match(figs$bertrand_price_paths$source, sprintf("^Session #%d: 4 rounds scored\\.$", s$bert))
+  # sessions made without a label: "Session #2: 5 rounds scored.", never "NA"
+  expect_match(figs$bertrand_price_paths$source, sprintf("^Session #%d: 5 rounds scored\\.$", s$bert))
   expect_false(any(grepl("NA", vapply(figs, function(x) x$source %||% "", ""))))
   sl_set_label(con, s$low, "Section 002")
   expect_match(slide_figures_build(con)$hotelling_low_price_paths$source,
@@ -46,7 +46,7 @@ test_that("every slide figure is drawn from the latest session of its game", {
   expect_match(figs$hotelling_high_rival_below_ne$note,
                "the rival priced $90.00, below the Nash price ($100.00)", fixed = TRUE)
   expect_match(figs$hotelling_low_rival_above_monopoly_both_firms$note,
-               "round 2: the rival priced $230.00, above the monopoly price ($225.00)", fixed = TRUE)
+               "round 2: the rival priced $230.00, above the monopoly price ($175.00)", fixed = TRUE)
   expect_match(figs$hotelling_low_last_round_cuts$note,
                paste("In round 10, the last round played, the biggest cuts after both firms",
                      "had priced above the Nash price the round before: $80.00 in market"),

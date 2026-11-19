@@ -30,7 +30,7 @@
 games:
   - id: bertrand
     label: "Bertrand (homogeneous good)"
-    rounds: 4
+    rounds: 5             # ECON 30303's 2025 game ran 5, so the leaderboard compares across years
     pairing: fixed
     horizon: known
     reveal: per_round
@@ -62,7 +62,7 @@ games:
     demand:
       model: hotelling_linear
       params:
-        V: 250              # reservation price ($O$2)
+        V: 200              # reservation price ($O$2); ECON 30303's 2025 game used 200, so the leaderboard compares across years
         t: 1                # differentiation / transport parameter ($O$3); 2026 sheet used 2
         L: 100              # street length
         M: 100              # market size (consumers)
@@ -70,8 +70,8 @@ games:
         coverage_decay: true  # market empties from the middle when both prices are high
     benchmarks:
       ne: compute         # = mc + t*L    = 100
-      monopoly: compute   # = V - t*L/2   = 200
-      collusive: compute  # with coverage decay, also 200
+      monopoly: compute   # = V - t*L/2   = 150
+      collusive: compute  # with coverage decay, also 150
     predictions:
       - {id: own_r1,      type: numeric, prompt: "What price will you set in round 1?"}
       - {id: class_final, type: numeric, prompt: "What will the class's average price be in the last round?"}
@@ -89,7 +89,7 @@ games:
     demand:
       model: hotelling_linear
       params:
-        V: 250
+        V: 200              # as in ECON 30303's 2025 game
         t: 0.5
         L: 100
         M: 100
@@ -97,8 +97,8 @@ games:
         coverage_decay: true
     benchmarks:
       ne: compute         # = mc + t*L    = 50
-      monopoly: compute   # = V - t*L/2   = 225
-      collusive: compute  # with coverage decay, also 225
+      monopoly: compute   # = V - t*L/2   = 175
+      collusive: compute  # with coverage decay, also 175
     predictions:
       - {id: own_r1,      type: numeric, prompt: "What price will you set in round 1?"}
       - {id: class_final, type: numeric, prompt: "What will the class's average price be in the last round?"}
