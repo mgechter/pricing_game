@@ -2500,16 +2500,16 @@
       "checksum": "817b50fe08ffd3a5f40ae94f075c34af"
     },
     "R/debrief_data.R": {
-      "checksum": "9d6165061dc7f2f4856ff96bfb963a70"
+      "checksum": "9c3a2173c4aa133ce42e870c8e19795a"
     },
     "R/debrief_plots.R": {
-      "checksum": "bc95c691463345aa3b81d2b92a05eb53"
+      "checksum": "1ad38bd888952f784cdafc8ff205f6f1"
     },
     "R/engine/demand.R": {
       "checksum": "7305de027a7cbbda81a4775906effa66"
     },
     "R/engine/equilibria.R": {
-      "checksum": "6b4dd27d69b928e13638e8e66ca7896f"
+      "checksum": "b2dfd1ae77945d8e4e50e162e0860fb6"
     },
     "R/engine/load_games.R": {
       "checksum": "2f2b21441454b4e1ba20eba958a64201"
@@ -2530,25 +2530,25 @@
       "checksum": "010afafb87bdd903b7723640fcb1dad2"
     },
     "R/mod_admin.R": {
-      "checksum": "b3eb2965ee566bf7b48aad13bd28a807"
+      "checksum": "8cb1a30bf6ef29ca31120a8664fa56b3"
     },
     "R/mod_display.R": {
-      "checksum": "cce16588fdb9cd5e67f2ce3c9b938e30"
+      "checksum": "980699076d204e1fcfbc484982e0fd7b"
     },
     "R/mod_player.R": {
-      "checksum": "9fbd371855127d62a03f135a965046ae"
+      "checksum": "e9e321e316ea71bdad0116db86f6554e"
     },
     "R/pairing.R": {
       "checksum": "2c1382048b736b862c4f4f27b06f561c"
     },
     "R/session_logic.R": {
-      "checksum": "3d7e5c512b3a097fe7b02fb8e9e9331d"
+      "checksum": "a4298c5dc229384917772eedf62aeb15"
     },
     "R/slide_figures.R": {
-      "checksum": "71e5cedbd95baebda4d38a5404814711"
+      "checksum": "957284a9b3ecc608f682e73f6762eab1"
     },
     "R/ui_helpers.R": {
-      "checksum": "6efb9eccc58a3ad4ce2e0e6603698120"
+      "checksum": "aa6ed5b33371029c80eab2b9ecad7b2c"
     },
     "README.md": {
       "checksum": "2aff716bdbda1bc26ca997819f39e9b6"
@@ -2595,11 +2595,17 @@
     "tests/testthat/test-resolve.R": {
       "checksum": "96f3f6a62352f340b8cb57882b41fd48"
     },
+    "tests/testthat/test-review-defects.R": {
+      "checksum": "1d767b783d28f5afbd579511244b46dc"
+    },
+    "tests/testthat/test-review-guards.R": {
+      "checksum": "887bdc00cf0896416427a6f2d6986d75"
+    },
     "tests/testthat/test-session-logic.R": {
       "checksum": "1f18ed07998f73ff255acb12be3cea1c"
     },
     "tests/testthat/test-slide-figures.R": {
-      "checksum": "d74437ab77387784d962e5e6a59a1336"
+      "checksum": "3be98ccd883e953e6ac8ebe57559386d"
     },
     "tests/testthat/test-ui-screens.R": {
       "checksum": "35f92fb7f98537f8689e581f1b3a7530"
