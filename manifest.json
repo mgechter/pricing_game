@@ -2533,7 +2533,7 @@
       "checksum": "010afafb87bdd903b7723640fcb1dad2"
     },
     "R/mod_admin.R": {
-      "checksum": "8cb1a30bf6ef29ca31120a8664fa56b3"
+      "checksum": "e3a938600ee9583b4f057db1209a4a96"
     },
     "R/mod_display.R": {
       "checksum": "980699076d204e1fcfbc484982e0fd7b"
@@ -2611,7 +2611,7 @@
       "checksum": "3be98ccd883e953e6ac8ebe57559386d"
     },
     "tests/testthat/test-ui-screens.R": {
-      "checksum": "35f92fb7f98537f8689e581f1b3a7530"
+      "checksum": "365038e4182f6a3dd1e981d1055aad38"
     }
   },
   "users": null
