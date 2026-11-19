@@ -2476,7 +2476,7 @@
       "checksum": "edd65a8481f82b35de322a37ba9e143d"
     },
     "config/games.yaml": {
-      "checksum": "40a2ece91e982b3cfe3995c505257e81"
+      "checksum": "10eecdae1800fa116ddae75fc7d51bb2"
     },
     "debrief.qmd": {
       "checksum": "bf0c6b5025e202cce17db072d3948054"
@@ -2581,13 +2581,13 @@
       "checksum": "17312f2e72f2548f0711d8adabaaaf61"
     },
     "tests/testthat/test-debrief.R": {
-      "checksum": "748d44a9c57495af63c7931a76c578bc"
+      "checksum": "810dce673c7bf71c449f5efdda12aead"
     },
     "tests/testthat/test-demand.R": {
       "checksum": "6442d6c6526f1b2e1a366f77d0899b76"
     },
     "tests/testthat/test-equilibria.R": {
-      "checksum": "96195bd860b634d472a116df25c510c8"
+      "checksum": "4c23f01d6a57aea1f125cf4f6298ab8a"
     },
     "tests/testthat/test-export.R": {
       "checksum": "214f85a0b03012f6ded193a47e180da2"
@@ -2602,13 +2602,13 @@
       "checksum": "1d767b783d28f5afbd579511244b46dc"
     },
     "tests/testthat/test-review-guards.R": {
-      "checksum": "887bdc00cf0896416427a6f2d6986d75"
+      "checksum": "463862d769b120ef99d683a824ae1721"
     },
     "tests/testthat/test-session-logic.R": {
       "checksum": "1f18ed07998f73ff255acb12be3cea1c"
     },
     "tests/testthat/test-slide-figures.R": {
-      "checksum": "3be98ccd883e953e6ac8ebe57559386d"
+      "checksum": "70b41b6085ff69cb011ad5509ee1ac2c"
     },
     "tests/testthat/test-ui-screens.R": {
       "checksum": "365038e4182f6a3dd1e981d1055aad38"
