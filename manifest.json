@@ -2476,7 +2476,7 @@
       "checksum": "edd65a8481f82b35de322a37ba9e143d"
     },
     "config/games.yaml": {
-      "checksum": "10eecdae1800fa116ddae75fc7d51bb2"
+      "checksum": "38d1c674ab7216128b12a745b70e5f1b"
     },
     "debrief.qmd": {
       "checksum": "bf0c6b5025e202cce17db072d3948054"
@@ -2500,10 +2500,10 @@
       "checksum": "eafe4e24e2d5f38213f98ec332933795"
     },
     "R/db.R": {
-      "checksum": "817b50fe08ffd3a5f40ae94f075c34af"
+      "checksum": "9a30b8bf3d65f4409f17f5e2af21cd8a"
     },
     "R/debrief_data.R": {
-      "checksum": "9c3a2173c4aa133ce42e870c8e19795a"
+      "checksum": "42efe01ffe6d4058993bd224ba353914"
     },
     "R/debrief_plots.R": {
       "checksum": "1ad38bd888952f784cdafc8ff205f6f1"
@@ -2533,10 +2533,10 @@
       "checksum": "010afafb87bdd903b7723640fcb1dad2"
     },
     "R/mod_admin.R": {
-      "checksum": "e3a938600ee9583b4f057db1209a4a96"
+      "checksum": "1166ce466781d3a52fe2eca167f6c1cf"
     },
     "R/mod_display.R": {
-      "checksum": "980699076d204e1fcfbc484982e0fd7b"
+      "checksum": "9e628a9a73ab67cc582abcc5b10a105a"
     },
     "R/mod_player.R": {
       "checksum": "e9e321e316ea71bdad0116db86f6554e"
@@ -2545,7 +2545,7 @@
       "checksum": "2c1382048b736b862c4f4f27b06f561c"
     },
     "R/session_logic.R": {
-      "checksum": "a4298c5dc229384917772eedf62aeb15"
+      "checksum": "a918a9b7d70baf4f745815e1e28bef24"
     },
     "R/slide_figures.R": {
       "checksum": "957284a9b3ecc608f682e73f6762eab1"
@@ -2554,7 +2554,7 @@
       "checksum": "aa6ed5b33371029c80eab2b9ecad7b2c"
     },
     "README.md": {
-      "checksum": "2aff716bdbda1bc26ca997819f39e9b6"
+      "checksum": "4fa6d20b2ffac755ea5ca7378d3eb442"
     },
     "scripts/playtest_bot.R": {
       "checksum": "5b28008e89b79c12c1f35bbd848dd459"
@@ -2581,7 +2581,7 @@
       "checksum": "17312f2e72f2548f0711d8adabaaaf61"
     },
     "tests/testthat/test-debrief.R": {
-      "checksum": "810dce673c7bf71c449f5efdda12aead"
+      "checksum": "52936d09369a98415bcf0284617e9103"
     },
     "tests/testthat/test-demand.R": {
       "checksum": "6442d6c6526f1b2e1a366f77d0899b76"
@@ -2605,7 +2605,7 @@
       "checksum": "463862d769b120ef99d683a824ae1721"
     },
     "tests/testthat/test-session-logic.R": {
-      "checksum": "1f18ed07998f73ff255acb12be3cea1c"
+      "checksum": "e6731127d55892613bd2b716a5ddc252"
     },
     "tests/testthat/test-slide-figures.R": {
       "checksum": "70b41b6085ff69cb011ad5509ee1ac2c"
