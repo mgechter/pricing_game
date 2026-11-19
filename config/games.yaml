@@ -48,7 +48,7 @@ games:
       - {id: own_r1,      type: numeric, prompt: "What price will you set in round 1?"}
       - {id: class_final, type: numeric, prompt: "What will the class's average price be in the last round?"}
       - {id: eq_guess,    type: numeric, prompt: "Where do you think prices end up in the long run?", reference: 0}
-      - {id: br_50,       type: numeric, prompt: "If your rival prices at $50, what price is best for you?", reference: 49}
+      - {id: br_50,       type: numeric, prompt: "If your rival prices at $50, what price is best for you?", reference: 49.99}
       - {id: can_hold,    type: choice,  choices: ["Yes", "No"], prompt: "Can you and your partner keep prices high the whole game?"}
       - {id: why,         type: text,    optional: true, prompt: "One sentence — why?"}
 

@@ -367,7 +367,7 @@ test_that("dbf_predictions summarises answers and computes actuals", {
   eqg <- it[[which(ids_seen == "eq_guess")]]
   expect_equal(eqg$actual, 0)                      # bertrand NE / reference
   br  <- it[[which(ids_seen == "br_50")]]
-  expect_equal(br$actual, 49)
+  expect_equal(br$actual, 49.99)
   own <- it[[which(ids_seen == "own_r1")]]
   expect_true(!is.null(own$per_student))
   expect_true(all(own$per_student$actual == 10))   # everyone priced 10 in round 1
